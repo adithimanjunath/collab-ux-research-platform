@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./server
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./server:/app
+    environment:
+      - FLASK_ENV=development
+    depends_on:
+      - mongodb
+
+  frontend:
+    build:
+      context: ./client
+    ports:
+      - "3000:3000"
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./client:/app
+    depends_on:
+      - backend
+
+  mongodb:
+    image: mongo
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodbdata:/data/db
+
+volumes:
+  mongodbdata:
