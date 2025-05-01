@@ -158,9 +158,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # client
-public
+
 package-lock.json
-package.json
 postcss.config.js
 tailwind.config.js
 

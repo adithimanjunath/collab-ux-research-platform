@@ -33,22 +33,23 @@ def handle_create_note(data):
     data["_id"]=str(result.inserted_id)
     emit("new_note", data, broadcast=True)
 
-# @app.route("/api/notes", methods=["POST", "OPTIONS"])
-# def create_note():
-#     if request.method == "OPTIONS":
-#         return '', 204
+@socketio.on("edit_note")
+def handle_edit_note(data):
+    note_id = data.get("id")
+    updated_fields = {
+        "text": data.get("text"),
+        "x": data.get("x"),
+        "y": data.get("y"),
+        "user": data.get("user")
+    }
+    notes_collection.update_one({"id": note_id}, {"$set": updated_fields})
+    emit("note_edited", data, broadcast=True)
 
-#     data = request.json
-#     note = {
-#         "id": data.get("id"),
-#         "text": data.get("text"),
-#         "x": data.get("x", 100),
-#         "y": data.get("y", 100),
-#     }
-#     result = notes_collection.insert_one(note)
-#     note["_id"] = str(result.inserted_id)
-    
- #   return jsonify({"status": "success", "note": note})
+@socketio.on("delete_note")
+def handle_delete_note(data):
+    note_id = data.get("id")
+    notes_collection.delete_one({"id": note_id})
+    emit("note_deleted", {"id": note_id}, broadcast=True)
 
 
 if __name__ == "__main__":
