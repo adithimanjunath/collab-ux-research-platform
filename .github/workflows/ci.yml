@@ -21,7 +21,7 @@ jobs:
 
       - name: 📦 Install and build frontend
         run: |
-          cd frontend
+          cd client
           npm install
           npm run build
 
@@ -32,6 +32,6 @@ jobs:
 
       - name: 📦 Install backend dependencies
         run: |
-          cd backend
+          cd server
           python -m pip install --upgrade pip
           pip install -r requirements.txt
