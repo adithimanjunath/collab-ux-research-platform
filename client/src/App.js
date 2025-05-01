@@ -1,9 +1,34 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { io } from "socket.io-client";
+
+
+const socket = io("http://localhost:5050");
 
 function App() {
   const [notes, setNotes] = useState([]);
   const [noteText, setNoteText] = useState("");
+
+  useEffect(() => {
+    socket.on("connect", () => {
+      console.log("🟢 Connected to socket.io server!", socket.id);
+    });
+
+    socket.on("new_note", (note) => {
+      setNotes((prev)=>{
+        const exists = prev.some((n)=> n.id === note.id);
+        if (!exists){
+          return [...prev, note];
+        }
+        return prev
+      });
+    });
+
+    return () => {
+      socket.off("connect");
+      socket.off("new_note");
+    };
+  }, []);
 
   const addNote = () => {
     if (!noteText.trim()) return;
@@ -13,14 +38,8 @@ function App() {
       x: 100,
       y: 100,
     };
-  
-    fetch("http://localhost:5050/api/notes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newNote),
-    });
-  
-    setNotes([...notes, newNote]);
+    socket.emit("create_note", newNote);
+    setNotes((prev)=>[...prev, newNote]);
     setNoteText("");
   };
   
