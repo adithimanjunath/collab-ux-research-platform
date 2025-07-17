@@ -45,6 +45,13 @@ def handle_edit_note(data):
     notes_collection.update_one({"id": note_id}, {"$set": updated_fields})
     emit("note_edited", data, broadcast=True)
 
+@socketio.on("move_note")
+def handle_move_note(data):
+    note_id = data.get("id")
+    x, y = data.get("x"), data.get("y")
+    notes_collection.update_one({"id": note_id}, {"$set": {"x": x, "y": y}})
+    emit("note_moved", data, broadcast=True)
+
 @socketio.on("delete_note")
 def handle_delete_note(data):
     note_id = data.get("id")
