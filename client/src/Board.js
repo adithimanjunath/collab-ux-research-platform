@@ -13,6 +13,8 @@ function Board() {
   const [notes, setNotes] = useState([]);
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("note");
+  const [onlineUsers, setOnlineUsers] = useState([]);
+
 
   // 🔁 Join board and load notes after login
   useEffect(() => {
@@ -53,12 +55,16 @@ function Board() {
         )
       );
     });
+    socket.on("user_list", (users) => {
+  setOnlineUsers(users);
+});
 
     return () => {
       socket.off("new_note");
       socket.off("note_edited");
       socket.off("note_deleted");
       socket.off("note_moved");
+      socket.off("user_list");
     };
   }, []);
 
@@ -130,6 +136,10 @@ function Board() {
       <h1 className="text-2xl font-bold mb-4">
         Board: <code>{boardId}</code>
       </h1>
+      <div className="mb-2">
+        <strong>🟢 Online Users:</strong>{" "}
+        {onlineUsers.length > 0 ? onlineUsers.join(", ") : "No one online"}
+      </div>
 
       <div className="flex space-x-2 mb-4">
         <input
