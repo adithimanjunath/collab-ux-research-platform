@@ -14,6 +14,8 @@ function Board() {
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("note");
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
 
 
   // 🔁 Join board and load notes after login
@@ -27,6 +29,13 @@ function Board() {
       .then((data) => setNotes(data))
       .catch((err) => console.error("Failed to load notes:", err));
   }, [isLoggedIn, boardId, username]);
+
+  const leaveBoard = () => {
+  socket.emit("leave_board", { boardId, username });
+  setIsLoggedIn(false);
+  setUsername("");
+  setNotes([]);
+};
 
   // 🧠 Handle incoming socket events
   useEffect(() => {
@@ -67,6 +76,26 @@ function Board() {
       socket.off("user_list");
     };
   }, []);
+const getInitials = (name) => {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+};
+
+const getUserColor = (username) => {
+  const colors = [
+    "bg-red-400", "bg-green-400", "bg-blue-400", "bg-yellow-400",
+    "bg-purple-400", "bg-pink-400", "bg-indigo-400", "bg-orange-400"
+  ];
+  let hash = 0;
+  for (let i = 0; i < username.length; i++) {
+    hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
 
   const addNote = () => {
     if (!noteText.trim()) return;
@@ -132,16 +161,20 @@ function Board() {
   }
 
   return (
-    <div className="h-screen bg-gray-100 p-4">
-      <h1 className="text-2xl font-bold mb-4">
+    
+    <div className="h-screen bg-gray-100 p-4 flex relative">
+      <button
+    onClick={leaveBoard}
+    className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+  >
+    Leave Board
+  </button>
+       <div className="flex-1 pr-4">
+        <h1 className="text-2xl font-bold mb-4">
         Board: <code>{boardId}</code>
-      </h1>
-      <div className="mb-2">
-        <strong>🟢 Online Users:</strong>{" "}
-        {onlineUsers.length > 0 ? onlineUsers.join(", ") : "No one online"}
-      </div>
+       </h1>
 
-      <div className="flex space-x-2 mb-4">
+        <div className="flex space-x-2 mb-4">
         <input
           type="text"
           value={noteText}
@@ -181,6 +214,41 @@ function Board() {
         ))}
       </div>
     </div>
+    
+
+      
+    {/* Sidebar: Online users */} 
+  {/* Sidebar toggle */}
+  <div className="relative">
+    <button
+      onClick={() => setSidebarOpen(!sidebarOpen)}
+      className="absolute left-[-40px] top-0 bg-gray-300 text-black rounded-l px-2 py-1 text-sm"
+    >
+      {sidebarOpen ? "←" : "→"}
+    </button>
+
+    {/* Collapsible sidebar */}
+    {sidebarOpen && (
+      <div className="w-64 bg-white border rounded p-4 h-fit shadow-md ml-2">
+        <h2 className="text-lg font-semibold mb-4">Online Users</h2>
+        <ul className="space-y-2">
+          {onlineUsers.length > 0 ? (
+            onlineUsers.map((user) => (
+              <li key={user} className="flex items-center space-x-2">
+                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-500 text-white font-bold">
+                  {user.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="text-gray-800">{user}</span>
+              </li>
+            ))
+          ) : (
+            <li className="text-gray-500">No users online</li>
+          )}
+        </ul>
+      </div>
+    )}
+  </div>
+</div>
   );
 }
 

@@ -74,7 +74,6 @@ def handle_join_board(data):
         emit("user_joined", f"{username} joined the board.", room=board_id)
 
 
-
 @socketio.on("edit_note")
 def handle_edit_note(data):
     board_id = data.get("boardId")
@@ -104,6 +103,16 @@ def handle_delete_note(data):
     note_id = data.get("id")
     notes_collection.delete_one({"id": note_id})
     emit("note_deleted", {"id": note_id}, room=board_id)
+
+@socketio.on("leave_board")
+def handle_leave_board(data):
+    board_id = data.get("boardId")
+    username = data.get("username")
+
+    if board_id and username:
+        if board_id in online_users:
+            online_users[board_id].discard(username)
+            emit("user_list", list(online_users[board_id]), room=board_id)
 
 
 
