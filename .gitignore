@@ -160,8 +160,6 @@ yarn-error.log*
 # client
 
 package-lock.json
-postcss.config.js
-tailwind.config.js
 
 # server
 venv
