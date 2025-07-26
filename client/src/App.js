@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Board from "./pages/Board";
 import BoardEntry from "./pages/BoardEntry";
+import './index.css'; // Import your global styles
 
 
 
