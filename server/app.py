@@ -9,7 +9,8 @@ from routes.note_routes import note_bp
 from events.board_events import register_socket_events
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000", "https://your-frontend.vercel.app"])
+CORS(app, origins=["http://localhost:3000", "https://collab-ux-research-platform-3hcubv1gw.vercel.app", "https://833df63f894b.ngrok-free.app"])
+
 
 socketio = SocketIO(
     app,
