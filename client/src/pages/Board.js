@@ -2,9 +2,11 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import { io } from "socket.io-client";
-import DraggableNote from "./DraggableNote";
+import DraggableNote from "../components/DraggableNote";
+import socket from "../services/socketService"; // Import the socket instance
+import { fetchNotesByBoard } from "../services/noteService";
 
-const socket = io(process.env.REACT_APP_SOCKET_URL || "http://localhost:5050");
+
 
 function Board() {
   const { boardId } = useParams();
@@ -20,14 +22,20 @@ function Board() {
 
   // 🔁 Join board and load notes after login
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || !boardId || !username) return;
 
     socket.emit("join_board", { boardId, username });
 
-    fetch(`${process.env.REACT_APP_SOCKET_URL || "http://localhost:5050"}/api/notes?boardId=${boardId}`)
-      .then((res) => res.json())
-      .then((data) => setNotes(data))
-      .catch((err) => console.error("Failed to load notes:", err));
+    fetchNotesByBoard(boardId)
+    .then((res) => {
+      if (!res.ok) throw new Error("Failed to fetch notes");
+      return res.json();
+    })
+    .then((data) => {
+      console.log("📥 Loaded notes:", data);
+      setNotes(data);
+    })
+    .catch((err) => console.error("❌ Failed to load notes:", err));
   }, [isLoggedIn, boardId, username]);
 
   const leaveBoard = () => {
