@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
-import { io } from "socket.io-client";
 import DraggableNote from "../components/DraggableNote";
 import socket from "../services/socketService"; // Import the socket instance
 import { fetchNotesByBoard } from "../services/noteService";
@@ -84,25 +83,7 @@ function Board() {
       socket.off("user_list");
     };
   }, []);
-const getInitials = (name) => {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
-};
 
-const getUserColor = (username) => {
-  const colors = [
-    "bg-red-400", "bg-green-400", "bg-blue-400", "bg-yellow-400",
-    "bg-purple-400", "bg-pink-400", "bg-indigo-400", "bg-orange-400"
-  ];
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = username.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-};
 
 
   const addNote = () => {
