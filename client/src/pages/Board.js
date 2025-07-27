@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import DraggableNote from "../components/DraggableNote";
-import socket from "../services/socketService"; // Import the socket instance
+import socket from "../services/socketService";
 import { fetchNotesByBoard } from "../services/noteService";
-
-
 
 function Board() {
   const { boardId } = useParams();
-  const [username, setUsername] = useState("");
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [username, setUsername] = useState(location.state?.username || "");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [notes, setNotes] = useState([]);
   const [noteText, setNoteText] = useState("");
@@ -17,64 +18,45 @@ function Board() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // ✅ Automatically log in if username is passed
+  useEffect(() => {
+    if (username && !isLoggedIn) {
+      setIsLoggedIn(true);
+    }
+  }, [username, isLoggedIn]);
 
-const handleLogin = () => {
-  if (!username.trim()) return;
-  setIsLoggedIn(true);
-};
+  const handleLogin = () => {
+    if (!username.trim()) return;
+    setIsLoggedIn(true);
+  };
 
-useEffect(() => {
-  if (!isLoggedIn || !boardId || !username) return;
+  useEffect(() => {
+    if (!isLoggedIn || !boardId || !username) return;
 
-  console.log("📤 Logging in and joining board:", boardId, "as", username);
-  socket.emit("join_board", { boardId, username });
+    console.log("📤 Logging in and joining board:", boardId, "as", username);
+    socket.emit("join_board", { boardId, username });
 
-  fetchNotesByBoard(boardId)
-    .then((data) => {
-      console.log("📥 Loaded notes from:", data);
-      setNotes(data);
-    })
-    
-    .catch((err) =>{
-      console.error("❌ Failed to load notes:", err.message);
-      console.dir(err);
-    } );
-}, [boardId, isLoggedIn, username]); // trigger only once, when login happens
-
-
-
-  // 🔁 Join board and load notes after login
-  // useEffect(() => {
-  //   if (!isLoggedIn || !boardId || !username) return;
-
-  //   socket.emit("join_board", { boardId, username });
-  //   console.log("📤 Fetching notes for board:", boardId);
-  //   console.log("➡️ API CALL:", `${process.env.REACT_APP_API_URL}/api/notes?boardId=${boardId}`);
-
-  //   fetchNotesByBoard(boardId)
-  //   .then((res) => {
-  //     if (!res.ok) throw new Error("Failed to fetch notes");
-  //     return res.json();
-  //   })
-  //   .then((data) => {
-  //     console.log("📥 Loaded notes:", data);
-  //     setNotes(data);
-  //     console.log("✅ Setting notes to state:", data.length);
-  //   })
-  //   .catch((err) => console.error("❌ Failed to load notes:", err));
-  // }, [isLoggedIn, boardId, username]);
+    fetchNotesByBoard(boardId)
+      .then((data) => {
+        console.log("📥 Loaded notes from:", data);
+        setNotes(data);
+      })
+      .catch((err) => {
+        console.error("❌ Failed to load notes:", err.message);
+        console.dir(err);
+      });
+  }, [boardId, isLoggedIn, username]);
 
   const leaveBoard = () => {
-  socket.emit("leave_board", { boardId, username });
-  setIsLoggedIn(false);
-  setUsername("");
-  setNotes([]);
-};
+    socket.emit("leave_board", { boardId, username });
+    setIsLoggedIn(false);
+    setUsername("");
+    setNotes([]);
+    navigate("/"); 
+  };
 
-  // 🧠 Handle incoming socket events
   useEffect(() => {
     socket.on("new_note", (note) => {
-      console.log("🟢 Received new_note:", note);
       setNotes((prev) => {
         const exists = prev.some((n) => n.id === note.id);
         return exists ? prev : [...prev, note];
@@ -98,9 +80,10 @@ useEffect(() => {
         )
       );
     });
+
     socket.on("user_list", (users) => {
-  setOnlineUsers(users);
-});
+      setOnlineUsers(users);
+    });
 
     return () => {
       socket.off("new_note");
@@ -110,8 +93,6 @@ useEffect(() => {
       socket.off("user_list");
     };
   }, []);
-
-
 
   const addNote = () => {
     if (!noteText.trim()) return;
@@ -153,132 +134,117 @@ useEffect(() => {
     if (e.key === "Enter") addNote();
   };
 
-  if (!isLoggedIn) {
+  // ✅ Only show name input if username is truly missing
+  if (!isLoggedIn && !username) {
     return (
       <div className="h-screen flex flex-col justify-center items-center bg-gray-100">
         <h1 className="text-2xl mb-4 font-bold">
           Enter your name to join board: <code>{boardId}</code>
         </h1>
         <input
-  type="text"
-  value={username}
-  onChange={(e) => setUsername(e.target.value)}
-  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-  className="p-2 rounded border w-64"
-/>
-<button
-  onClick={handleLogin}
-  className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
->
-  Join Board
-</button>
-        {/* <input
           type="text"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && username && setIsLoggedIn(true)}
+          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
           className="p-2 rounded border w-64"
         />
         <button
-          onClick={() => username && setIsLoggedIn(true)}
+          onClick={handleLogin}
           className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
         >
           Join Board
-        </button> */}
+        </button>
       </div>
     );
   }
 
   return (
-    
     <div className="h-screen bg-gray-100 p-4 flex relative">
       <button
-    onClick={leaveBoard}
-    className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-  >
-    Leave Board
-  </button>
-       <div className="flex-1 pr-4">
+        onClick={leaveBoard}
+        className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+      >
+        Leave Board
+      </button>
+
+      <div className="flex-1 pr-4">
         <h1 className="text-2xl font-bold mb-4">
-        Board: <code>{boardId}</code>
-       </h1>
+          Board: <code>{boardId}</code>
+        </h1>
 
         <div className="flex space-x-2 mb-4">
-        <input
-          type="text"
-          value={noteText}
-          onChange={(e) => setNoteText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="border p-2 rounded w-full"
-          placeholder="Type a note..."
-        />
-        <select
-          value={noteType}
-          onChange={(e) => setNoteType(e.target.value)}
-          className="border p-2 rounded"
-        >
-          <option value="note">Note</option>
-          <option value="idea">Idea</option>
-          <option value="issue">Issue</option>
-          <option value="research">Research</option>
-        </select>
-        <button
-          onClick={addNote}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          Add Note
-        </button>
+          <input
+            type="text"
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="border p-2 rounded w-full"
+            placeholder="Type a note..."
+          />
+          <select
+            value={noteType}
+            onChange={(e) => setNoteType(e.target.value)}
+            className="border p-2 rounded"
+          >
+            <option value="note">Note</option>
+            <option value="idea">Idea</option>
+            <option value="issue">Issue</option>
+            <option value="research">Research</option>
+          </select>
+          <button
+            onClick={addNote}
+            className="bg-blue-500 text-white px-4 py-2 rounded"
+          >
+            Add Note
+          </button>
+        </div>
+
+        <div className="relative w-full h-[80vh] border rounded bg-white overflow-hidden">
+          {notes.map((note) => (
+            <DraggableNote
+              key={note.id}
+              note={note}
+              onMove={(id, x, y) => updateNotePosition(id, x, y)}
+              onEdit={(updatedNote) =>
+                socket.emit("edit_note", { ...updatedNote, boardId })
+              }
+              onDelete={(id) => socket.emit("delete_note", { id, boardId })}
+              isOwner={note.user === username}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="relative w-full h-[80vh] border rounded bg-white overflow-hidden">
-        {console.log("🔍 Rendering notes:", notes)}
-        {notes.map((note) => (
-          <DraggableNote
-            key={note.id}
-            note={note}
-            onMove={(id, x, y) => updateNotePosition(id, x, y)}
-            onEdit={(updatedNote) => socket.emit("edit_note", { ...updatedNote, boardId })}
-            onDelete={(id) => socket.emit("delete_note", { id, boardId })}
-            isOwner={note.user === username}
-          />
-        ))}
+      {/* Sidebar: Online users */}
+      <div className="relative">
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="absolute left-[-40px] top-0 bg-gray-300 text-black rounded-l px-2 py-1 text-sm"
+        >
+          {sidebarOpen ? "←" : "→"}
+        </button>
+
+        {sidebarOpen && (
+          <div className="w-64 bg-white border rounded p-4 h-fit shadow-md ml-2">
+            <h2 className="text-lg font-semibold mb-4">Online Users</h2>
+            <ul className="space-y-2">
+              {onlineUsers.length > 0 ? (
+                onlineUsers.map((user) => (
+                  <li key={user} className="flex items-center space-x-2">
+                    <div className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-500 text-white font-bold">
+                      {user.slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="text-gray-800">{user}</span>
+                  </li>
+                ))
+              ) : (
+                <li className="text-gray-500">No users online</li>
+              )}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
-    
-
-      
-    {/* Sidebar: Online users */} 
-  {/* Sidebar toggle */}
-  <div className="relative">
-    <button
-      onClick={() => setSidebarOpen(!sidebarOpen)}
-      className="absolute left-[-40px] top-0 bg-gray-300 text-black rounded-l px-2 py-1 text-sm"
-    >
-      {sidebarOpen ? "←" : "→"}
-    </button>
-
-    {/* Collapsible sidebar */}
-    {sidebarOpen && (
-      <div className="w-64 bg-white border rounded p-4 h-fit shadow-md ml-2">
-        <h2 className="text-lg font-semibold mb-4">Online Users</h2>
-        <ul className="space-y-2">
-          {onlineUsers.length > 0 ? (
-            onlineUsers.map((user) => (
-              <li key={user} className="flex items-center space-x-2">
-                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-500 text-white font-bold">
-                  {user.slice(0, 2).toUpperCase()}
-                </div>
-                <span className="text-gray-800">{user}</span>
-              </li>
-            ))
-          ) : (
-            <li className="text-gray-500">No users online</li>
-          )}
-        </ul>
-      </div>
-    )}
-  </div>
-</div>
   );
 }
 
