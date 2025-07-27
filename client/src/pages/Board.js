@@ -5,8 +5,6 @@ import DraggableNote from "../components/DraggableNote";
 import socket from "../services/socketService"; // Import the socket instance
 import { fetchNotesByBoard } from "../services/noteService";
 
-
-
 function Board() {
   const { boardId } = useParams();
   const [username, setUsername] = useState("");
@@ -17,74 +15,64 @@ function Board() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-
-
-  // 🔁 Join board and load notes after login
-  useEffect(() => {
-    if (!isLoggedIn || !boardId || !username) return;
-
-    socket.emit("join_board", { boardId, username });
-
-    fetchNotesByBoard(boardId)
-    .then((res) => {
-      if (!res.ok) throw new Error("Failed to fetch notes");
-      return res.json();
-    })
-    .then((data) => {
-      console.log("📥 Loaded notes:", data);
-      setNotes(data);
-    })
-    .catch((err) => console.error("❌ Failed to load notes:", err));
-  }, [isLoggedIn, boardId, username]);
-
-  const leaveBoard = () => {
-  socket.emit("leave_board", { boardId, username });
-  setIsLoggedIn(false);
-  setUsername("");
-  setNotes([]);
+const handleLogin = () => {
+  if (!username.trim()) return;
+  setIsLoggedIn(true);
 };
 
-  // 🧠 Handle incoming socket events
-  useEffect(() => {
-    socket.on("new_note", (note) => {
-      console.log("🟢 Received new_note:", note);
-      setNotes((prev) => {
-        const exists = prev.some((n) => n.id === note.id);
-        return exists ? prev : [...prev, note];
-      });
-    });
+useEffect(() => {
+  if (!isLoggedIn || !boardId || !username) return;
 
-    socket.on("note_edited", (updatedNote) => {
-      setNotes((prev) =>
-        prev.map((note) => (note.id === updatedNote.id ? updatedNote : note))
-      );
-    });
+  socket.emit("join_board", { boardId, username });
 
-    socket.on("note_deleted", ({ id }) => {
-      setNotes((prev) => prev.filter((note) => note.id !== id));
-    });
+  fetchNotesByBoard(boardId)
+    .catch((err) =>{
+      console.error("❌ Failed to load notes:", err.message);
+      console.dir(err);
+    } );
+}, [boardId, isLoggedIn, username]);
 
-    socket.on("note_moved", (updated) => {
-      setNotes((prev) =>
-        prev.map((note) =>
-          note.id === updated.id ? { ...note, x: updated.x, y: updated.y } : note
-        )
-      );
+useEffect(() => {
+  socket.on("new_note", (note) => {
+    setNotes((prev) => {
+      const exists = prev.some((n) => n.id === note.id);
+      return exists ? prev : [...prev, note];
+    });
+  });
+
+  socket.on("note_edited", (updatedNote) => {
+    setNotes((prev) =>
+      prev.map((note) => (note.id === updatedNote.id ? updatedNote : note))
+    );
+  });
+
+  socket.on("note_deleted", ({ id }) => {
+    setNotes((prev) => prev.filter((note) => note.id !== id));
+  });
+
+  socket.on("note_moved", (updated) => {
+    setNotes((prev) =>
+      prev.map((note) =>
+        note.id === updated.id ? { ...note, x: updated.x, y: updated.y } : note));
     });
     socket.on("user_list", (users) => {
-  setOnlineUsers(users);
-});
+    setOnlineUsers(users);
+  });
 
-    return () => {
-      socket.off("new_note");
-      socket.off("note_edited");
-      socket.off("note_deleted");
-      socket.off("note_moved");
-      socket.off("user_list");
-    };
+  return () => {
+    socket.off("new_note");
+    socket.off("note_edited");
+    socket.off("note_deleted");
+    socket.off("note_moved");
+    socket.off("user_list");};
   }, []);
 
-
+  const leaveBoard = () => {
+    socket.emit("leave_board", { boardId, username });
+    setIsLoggedIn(false);
+    setUsername("");
+    setNotes([]);
+  };
 
   const addNote = () => {
     if (!noteText.trim()) return;
@@ -136,11 +124,11 @@ function Board() {
           type="text"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && username && setIsLoggedIn(true)}
+          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
           className="p-2 rounded border w-64"
         />
         <button
-          onClick={() => username && setIsLoggedIn(true)}
+          onClick={handleLogin}
           className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
         >
           Join Board
@@ -149,8 +137,7 @@ function Board() {
     );
   }
 
-  return (
-    
+  return ( 
     <div className="h-screen bg-gray-100 p-4 flex relative">
       <button
     onClick={leaveBoard}
@@ -158,29 +145,29 @@ function Board() {
   >
     Leave Board
   </button>
-       <div className="flex-1 pr-4">
-        <h1 className="text-2xl font-bold mb-4">
-        Board: <code>{boardId}</code>
-       </h1>
 
-        <div className="flex space-x-2 mb-4">
-        <input
-          type="text"
-          value={noteText}
-          onChange={(e) => setNoteText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="border p-2 rounded w-full"
-          placeholder="Type a note..."
-        />
-        <select
-          value={noteType}
-          onChange={(e) => setNoteType(e.target.value)}
-          className="border p-2 rounded"
-        >
-          <option value="note">Note</option>
-          <option value="idea">Idea</option>
-          <option value="issue">Issue</option>
-          <option value="research">Research</option>
+  <div className="flex-1 pr-4">
+    <h1 className="text-2xl font-bold mb-4">
+        Board: <code>{boardId}</code>
+      </h1>
+    <div className="flex space-x-2 mb-4">
+      <input
+        type="text"
+        value={noteText}
+        onChange={(e) => setNoteText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className="border p-2 rounded w-full"
+        placeholder="Type a note..."
+      />
+      <select
+        value={noteType}
+        onChange={(e) => setNoteType(e.target.value)}
+        className="border p-2 rounded"
+      >
+        <option value="note">Note</option>
+        <option value="idea">Idea</option>
+        <option value="issue">Issue</option>
+        <option value="research">Research</option>
         </select>
         <button
           onClick={addNote}
@@ -191,6 +178,7 @@ function Board() {
       </div>
 
       <div className="relative w-full h-[80vh] border rounded bg-white overflow-hidden">
+        {console.log("🔍 Rendering notes:", notes)}
         {notes.map((note) => (
           <DraggableNote
             key={note.id}
@@ -203,11 +191,7 @@ function Board() {
         ))}
       </div>
     </div>
-    
 
-      
-    {/* Sidebar: Online users */} 
-  {/* Sidebar toggle */}
   <div className="relative">
     <button
       onClick={() => setSidebarOpen(!sidebarOpen)}
