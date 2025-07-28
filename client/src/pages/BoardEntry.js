@@ -1,43 +1,4 @@
-// import React, { useState } from "react";
-// import { useNavigate } from "react-router-dom";
-
-// function BoardEntry() {
-//   const [input, setInput] = useState("");
-//   const navigate = useNavigate();
-
-//   const goToBoard = () => {
-//     if (input.trim()) {
-//       navigate(`/${input.trim()}`);
-//     }
-//   };
-
-//   const handleKeyDown = (e) => {
-//     if (e.key === "Enter") goToBoard();
-//   };
-
-//   return (
-//     <div className="h-screen flex flex-col justify-center items-center bg-gray-100">
-//       <h1 className="text-2xl mb-4 font-bold">Enter Company / Board Name</h1>
-//       <input
-//         type="text"
-//         value={input}
-//         onChange={(e) => setInput(e.target.value)}
-//         onKeyDown={handleKeyDown}
-//         placeholder="e.g. acme-design"
-//         className="p-2 rounded border w-64"
-//       />
-//       <button
-//         onClick={goToBoard}
-//         className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
-//       >
-//         Go to Board
-//       </button>
-//     </div>
-//   );
-// }
-
-// export default BoardEntry;
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 function BoardEntry() {
@@ -45,9 +6,19 @@ function BoardEntry() {
   const [userName, setUserName] = useState("");
   const navigate = useNavigate();
 
+  const sanitizeBoardName = (name) =>
+  name.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9\-]/g, "");
+
+  useEffect(() => {
+  console.log("🚨 BoardEntry loaded!");
+}, []);
+
   const handleJoin = () => {
     if (!boardName || !userName) return;
-    navigate(`/${boardName.trim()}`, {
+     const sanitizedBoard = sanitizeBoardName(boardName);
+     console.log("🧪 boardName:", boardName);
+     console.log("🧪 sanitizedBoard:", sanitizedBoard);
+      navigate(`/${sanitizedBoard}`, {
       state: { username: userName.trim() }
     });
   };
