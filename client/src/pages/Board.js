@@ -17,7 +17,7 @@ function Board() {
   const [noteType, setNoteType] = useState("note");
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
 
   useEffect(() => {
