@@ -17,6 +17,8 @@ function Board() {
   const [noteType, setNoteType] = useState("note");
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+
 
   useEffect(() => {
   setNotes([]);
@@ -37,8 +39,8 @@ function Board() {
 
   useEffect(() => {
     if (!isLoggedIn || !boardId || !username) return;
+    setIsLoading(true);
 
-    console.log("📤 Logging in and joining board:", boardId, "as", username);
     socket.emit("join_board", { boardId, username });
 
     fetchNotesByBoard(boardId)
@@ -48,6 +50,7 @@ function Board() {
       })
       .catch((err) => {
         console.error("❌ Failed to load notes:", err.message);
+        setIsLoading(false);
         console.dir(err);
       });
   }, [boardId, isLoggedIn, username]);
@@ -216,7 +219,16 @@ function Board() {
         </div>
 
         <div className="relative w-full h-[80vh] border rounded bg-white overflow-hidden">
-          {notes.map((note) => (
+          {isLoading ? (
+         <div className="h-full flex justify-center items-center">
+          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        ) : notes.length === 0 ? (
+          <div className="h-full flex justify-center items-center text-gray-400 italic">
+            No notes yet — add your first one!
+        </div>      
+        ) : (
+          notes.map((note) => (
             <DraggableNote
               key={note.id}
               note={note}
@@ -227,7 +239,7 @@ function Board() {
               onDelete={(id) => socket.emit("delete_note", { id, boardId })}
               isOwner={note.user === username}
             />
-          ))}
+          )))}
         </div>
       </div>
 
