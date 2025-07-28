@@ -50,9 +50,11 @@ function Board() {
       })
       .catch((err) => {
         console.error("❌ Failed to load notes:", err.message);
-        setIsLoading(false);
         console.dir(err);
-      });
+      })
+      .finally(() => {
+      setIsLoading(false); // ✅ Hide spinner no matter what
+    });
   }, [boardId, isLoggedIn, username]);
 
   const leaveBoard = () => {
