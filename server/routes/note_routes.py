@@ -12,16 +12,20 @@ def home():
 def get_notes():
     board_id = request.args.get("boardId")
     if not board_id:
-        print("❌ boardId is missing")
         return jsonify({"error": "Missing boardId"}), 400
 
     try:
-        print(f"📥 Fetching notes for boardId: {board_id}")
-        notes = list(notes_collection.find({}))
-        for note in notes:
-            note["_id"] = str(note["_id"])
-            print(f"✅ Found {len(notes)} notes for board {board_id}")
+        notes = get_notes_by_board(board_id)
         return jsonify(notes)
     except Exception as e:
-        print(f"❌ Failed to fetch notes for {board_id}:", e)
         return jsonify({"error": "Internal server error"}), 500
+    
+@note_bp.route("/api/notes/cleanup", methods=["POST"])
+def cleanup_notes_without_boardId():
+    try:
+        result = notes_collection.delete_many({"boardId": {"$exists": False}})
+        return jsonify({
+            "message": f"✅ Deleted {result.deleted_count} notes without boardId."
+            }), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to delete notes"}), 500

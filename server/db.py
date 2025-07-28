@@ -11,3 +11,4 @@ if not mongo_uri:
 client = MongoClient(mongo_uri)
 db = client["ux_research"]
 notes_collection = db["notes"]
+

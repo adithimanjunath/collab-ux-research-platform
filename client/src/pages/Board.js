@@ -18,6 +18,11 @@ function Board() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  useEffect(() => {
+  setNotes([]);
+  setOnlineUsers([]);
+}, [boardId]);
+
   // ✅ Automatically log in if username is passed
   useEffect(() => {
     if (username && !isLoggedIn) {
@@ -39,7 +44,7 @@ function Board() {
     fetchNotesByBoard(boardId)
       .then((data) => {
         console.log("📥 Loaded notes from:", data);
-        setNotes(data);
+        setNotes(data.filter((n) => n.boardId === boardId));
       })
       .catch((err) => {
         console.error("❌ Failed to load notes:", err.message);
@@ -57,6 +62,7 @@ function Board() {
 
   useEffect(() => {
     socket.on("new_note", (note) => {
+    if (note.boardId !== boardId) return;
       setNotes((prev) => {
         const exists = prev.some((n) => n.id === note.id);
         return exists ? prev : [...prev, note];
@@ -64,6 +70,7 @@ function Board() {
     });
 
     socket.on("note_edited", (updatedNote) => {
+      if (updatedNote.boardId !== boardId) return;
       setNotes((prev) =>
         prev.map((note) => (note.id === updatedNote.id ? updatedNote : note))
       );
@@ -74,6 +81,7 @@ function Board() {
     });
 
     socket.on("note_moved", (updated) => {
+        if (updated.boardId !== boardId) return;
       setNotes((prev) =>
         prev.map((note) =>
           note.id === updated.id ? { ...note, x: updated.x, y: updated.y } : note
@@ -92,7 +100,7 @@ function Board() {
       socket.off("note_moved");
       socket.off("user_list");
     };
-  }, []);
+  }, [boardId]);
 
   const addNote = () => {
     if (!noteText.trim()) return;
@@ -133,6 +141,14 @@ function Board() {
   const handleKeyDown = (e) => {
     if (e.key === "Enter") addNote();
   };
+
+  useEffect(() => {
+  return () => {
+    if (boardId && username) {
+      socket.emit("leave_board", { boardId, username });
+    }
+  };
+}, [boardId, username]);
 
   // ✅ Only show name input if username is truly missing
   if (!isLoggedIn && !username) {
