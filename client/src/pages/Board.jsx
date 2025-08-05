@@ -4,13 +4,17 @@ import { v4 as uuidv4 } from "uuid";
 import DraggableNote from "../components/DraggableNote";
 import socket from "../services/socketService";
 import { fetchNotesByBoard } from "../services/noteService";
+import {auth} from "../firebase"; // Import auth for user info
+import { onAuthStateChanged } from "firebase/auth";
 
 function Board() {
   const { boardId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState(location.state?.username || "");
+  const [username, setUsername] = useState("");
+  const [user, setUser] = useState(null);
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [notes, setNotes] = useState([]);
   const [noteText, setNoteText] = useState("");
@@ -19,15 +23,27 @@ function Board() {
   const [isLoading, setIsLoading] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
 
-
   useEffect(() => {
     setNotes([]);
     setOnlineUsers([]);
   }, [boardId]);
 
-  useEffect(() => {
-    if (username && !isLoggedIn) setIsLoggedIn(true);
-  }, [username, isLoggedIn]);
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    if (currentUser) {
+      setUser(currentUser);
+      setUsername(currentUser.displayName || "Anonymous");
+      setIsLoggedIn(true);
+    } else {
+      setUser(null);
+      setUsername("");
+      setIsLoggedIn(false);
+    }
+  });
+
+  return () => unsubscribe();
+}, []);
+
 
   useEffect(() => {
     if (!isLoggedIn || !boardId || !username) return;
@@ -201,28 +217,14 @@ const isOverlapping = (pos) =>
   socket.emit("user_typing", { boardId, username });
 };
 
-  if (!isLoggedIn && !username) {
-    return (
-      <div className="h-screen flex flex-col justify-center items-center bg-gray-100">
-        <h1 className="text-2xl mb-4 font-bold">
-          Enter your name to join board: <code>{boardId}</code>
-        </h1>
-        <input
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && setIsLoggedIn(true)}
-          className="p-2 rounded border w-64"
-        />
-        <button
-          onClick={() => setIsLoggedIn(true)}
-          className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          Join Board
-        </button>
-      </div>
-    );
-  }
+  if (!isLoggedIn) {
+  return (
+    <div className="h-screen flex items-center justify-center">
+      <p className="text-xl text-gray-500">Please log in to access the board.</p>
+    </div>
+  );
+}
+
 
   return (
     <div className="relative h-screen w-screen bg-neutral-100">
@@ -270,6 +272,12 @@ const isOverlapping = (pos) =>
 
         </div>
       )}
+      {user && (
+  <div className="fixed top-4 left-1/2 transform -translate-x-1/2 text-sm text-gray-500">
+    Logged in as <strong>{user.displayName}</strong>
+  </div>
+)}
+
 
       {/* 🎯 Main canvas area */}
       <div className="absolute inset-0 overflow-auto pt-[100px] flex justify-center items-start">
