@@ -87,6 +87,9 @@ function Board() {
   }, 3000); // 3s delay
 });
 
+socket.on("load_existing_notes", (notes) => {
+  setNotes(notes);  // Replace current notes
+});
 
     socket.on("user_list", (users) => setOnlineUsers(users));
 
@@ -97,6 +100,7 @@ function Board() {
       socket.off("note_moved");
       socket.off("user_list");
       socket.off("user_typing");
+      socket.off("load_existing_notes");
     };
   }, [boardId, username]);
 
