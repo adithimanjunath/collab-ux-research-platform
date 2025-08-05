@@ -1,5 +1,5 @@
 from flask_socketio import emit, join_room
-from services.note_service import create_note, update_note, delete_note
+from services.note_service import create_note, update_note, delete_note, get_notes_by_board
 from db import notes_collection
 
 online_users = {}
@@ -36,7 +36,12 @@ def register_socket_events(socketio):
         board_id, username = data.get("boardId"), data.get("username")
         join_room(board_id)
         online_users.setdefault(board_id, set()).add(username)
+
         emit("user_list", list(online_users[board_id]), room=board_id)
+
+        notes = get_notes_by_board(board_id)
+        emit("board_notes", notes, room=board_id)
+
         emit("user_joined", f"{username} joined the board.", room=board_id)
 
     @socketio.on("leave_board")
@@ -45,3 +50,9 @@ def register_socket_events(socketio):
         if board_id in online_users:
             online_users[board_id].discard(username)
             emit("user_list", list(online_users[board_id]), room=board_id)
+    
+    @socketio.on("user_typing")
+    def handle_user_typing(data):
+        board_id, username = data.get("boardId"), data.get("username")
+        if board_id in online_users and username in online_users[board_id]:
+            emit("user_typing", {"username": username}, room=board_id, include_self=False)

@@ -22,3 +22,4 @@ def update_note(note_id, fields):
 
 def delete_note(note_id):
     notes_collection.delete_one({"id": note_id})
+
