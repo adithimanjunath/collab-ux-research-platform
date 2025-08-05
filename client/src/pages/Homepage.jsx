@@ -45,7 +45,7 @@ function HomePage() {
     <div className="flex flex-col items-center justify-center h-screen space-y-6 bg-gray-100">
       {!user ? (
         <>
-        <h1 className="text-3xl font-bold mb-4">Welcome to Collaborative UX Research</h1>
+        <h1 className="text-3xl font-bold mb-4">Welcome to Collaborative UX Research Platform</h1>
         <button onClick={handleLogin} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
           Sign in with Google </button>
         </>
@@ -55,7 +55,8 @@ function HomePage() {
           <img src ={user.photoURL} alt="avatar" className="w-24 h-24 rounded-full mb-2" />
           <p className="text-lg font-semibold">{user.name}</p>
           <p className="text-sm text-gray-600">{user.email}</p>
-          <button onClick={handleLogout} className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+          <button onClick={handleLogout} className="mt-4 px-6 py-2 bg-red-400 text-white rounded-lg hover:bg-red-600">
+            Logout
           </button>
         </div>
         <h1 className="text-2xl font-bold mb-4">Select an option</h1>
@@ -63,14 +64,14 @@ function HomePage() {
           <button onClick={() => goTo("/collab")} className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700">
             Create Board
           </button>
-          <button onClick={() => goTo("/research")} className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+          <button onClick={() => goTo("/report")} className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
             Report Generator
           </button>
         </div>
         </>
       )}
       <footer className="absolute bottom-4 text-sm text-gray-500">
-        © 2023 Collaborative UX Research Platform | Made with ❤️ by Adithi M Shrouthy
+        © 2025 Collaborative UX Research Platform | Made with by Adithi M Shrouthy
       </footer>
     </div>
   );

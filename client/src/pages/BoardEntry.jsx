@@ -1,9 +1,9 @@
 import React, { useState,useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import {auth} from "../firebase"; // Import auth for user info
 
 function BoardEntry() {
   const [boardName, setBoardName] = useState("");
-  const [userName, setUserName] = useState("");
   const navigate = useNavigate();
 
   const sanitizeBoardName = (name) =>
@@ -11,15 +11,20 @@ function BoardEntry() {
 
   useEffect(() => {
   console.log("🚨 BoardEntry loaded!");
-}, []);
+
+  if (!auth.currentUser) {
+    navigate("/");
+  }
+}, [navigate]);
 
   const handleJoin = () => {
-    if (!boardName || !userName) return;
+    if (!boardName ) return;
+
      const sanitizedBoard = sanitizeBoardName(boardName);
-     console.log("🧪 boardName:", boardName);
-     console.log("🧪 sanitizedBoard:", sanitizedBoard);
+     const username = auth.currentUser?.displayName || auth.currentUser?.email || "Guest";
+    
       navigate(`/${sanitizedBoard}`, {
-      state: { username: userName.trim() }
+      state: { username }
     });
   };
 
@@ -31,13 +36,6 @@ function BoardEntry() {
         placeholder="e.g. acme-design"
         value={boardName}
         onChange={(e) => setBoardName(e.target.value)}
-      />
-      <h1 className="text-2xl font-bold">Enter Your Name</h1>
-      <input
-        className="p-2 border rounded w-64"
-        placeholder="e.g. Alice"
-        value={userName}
-        onChange={(e) => setUserName(e.target.value)}
       />
       <button
         onClick={handleJoin}
