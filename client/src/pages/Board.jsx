@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import DraggableNote from "../components/DraggableNote";
 import socket from "../services/socketService";
@@ -9,7 +9,6 @@ import { onAuthStateChanged } from "firebase/auth";
 
 function Board() {
   const { boardId } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
 
   const [username, setUsername] = useState("");
