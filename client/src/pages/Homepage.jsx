@@ -1,10 +1,22 @@
 import React, {useState, useEffect} from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, provider,signInWithPopup, signOut } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 function HomePage() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser({currentUser});
+      } else {
+        setUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
