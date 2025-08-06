@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider,signInWithPopup, signOut } from "firebase/auth";
+import { getAuth, setPersistence, browserSessionPersistence, browserLocalPersistence ,GoogleAuthProvider,signInWithPopup, signOut } from "firebase/auth";
 
 
 const firebaseConfig = {
@@ -15,6 +15,15 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+const auth = getAuth(app);
+
+const isDemo = window.location.hostname === "localhost" || window.location.hostname.includes === "vercel.app";
+setPersistence(auth, isDemo ? browserSessionPersistence : browserLocalPersistence)
+  .then(() => {
+   console.log(`using ${isDemo ? 'session' : 'local'} persistence for auth`);
+  }
+).catch((error) => {
+  console.error("Error setting persistence:", error);
+  });
+export {auth, signInWithPopup, signOut};
 export const provider = new GoogleAuthProvider();
-export {signInWithPopup, signOut};
