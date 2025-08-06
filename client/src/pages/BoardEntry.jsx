@@ -23,7 +23,7 @@ function BoardEntry() {
      const username = auth.currentUser?.displayName || auth.currentUser?.email || "Guest";
     
       navigate(`/${sanitizedBoard}`, {
-      state: { username: displayName ||auth.currentUser?.displayName || auth.currentUser?.email || "Guest" },
+      state: { username},
     });
   };
 
@@ -34,7 +34,7 @@ function BoardEntry() {
         className="p-2 border rounded w-64"
         placeholder="e.g. acme-design"
         value={boardName}
-        onChange={(e) => setDisplayName(e.target.value)}
+        onChange={(e) => setBoardName(e.target.value)}
       />
       <button
         onClick={handleJoin}

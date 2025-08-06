@@ -97,7 +97,7 @@ function DraggableNote({ note, onMove, onEdit, onDelete, isOwner }) {
     >
       <div className="flex justify-between items-center mb-2">
         <span className="font-semibold text-gray-800 text-sm">
-          {note.user || "Anonymous"}
+          {isOwner ? "You": (note.user || "Anonymous")}
         </span>
         <span className="text-lg">{emoji}</span>
       </div>

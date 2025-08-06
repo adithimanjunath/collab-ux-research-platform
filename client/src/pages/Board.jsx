@@ -10,9 +10,12 @@ import { onAuthStateChanged } from "firebase/auth";
 function Board() {
   const { boardId } = useParams();
   const navigate = useNavigate();
+  const firebaseUser = auth.currentUser;
+  const displayName = firebaseUser?.displayName || firebaseUser?.email || "";
+  const [username, setUsername] = useState(displayName);
+  
 
   const location = useLocation();
-  const [username, setUsername] = useState(location.state?.username || "");
   const [user, setUser] = useState(null);
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
