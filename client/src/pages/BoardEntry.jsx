@@ -4,7 +4,6 @@ import {auth} from "../firebase"; // Import auth for user info
 
 function BoardEntry() {
   const [boardName, setBoardName] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const navigate = useNavigate();
 
   const sanitizeBoardName = (name) =>

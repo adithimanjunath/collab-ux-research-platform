@@ -14,8 +14,6 @@ function Board() {
   const displayName = firebaseUser?.displayName || firebaseUser?.email || "";
   const [username, setUsername] = useState(displayName);
   
-
-  const location = useLocation();
   const [user, setUser] = useState(null);
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
