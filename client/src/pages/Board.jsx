@@ -202,9 +202,13 @@ const isOverlapping = (pos) =>
     text: noteText,
     x: availablePos.x,
     y: availablePos.y,
-    user: username,
     boardId,
     type: noteType,
+    user:{
+      name: user?.displayName ||"Anonymous",
+      email: user?.email,
+      uid: user?.uid
+    }
   };
 
   socket.emit("create_note", newNote);
