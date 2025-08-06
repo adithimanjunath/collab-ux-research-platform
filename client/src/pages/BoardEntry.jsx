@@ -4,6 +4,7 @@ import {auth} from "../firebase"; // Import auth for user info
 
 function BoardEntry() {
   const [boardName, setBoardName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const navigate = useNavigate();
 
   const sanitizeBoardName = (name) =>
@@ -22,7 +23,7 @@ function BoardEntry() {
      const username = auth.currentUser?.displayName || auth.currentUser?.email || "Guest";
     
       navigate(`/${sanitizedBoard}`, {
-      state: { username }
+      state: { username: displayName ||auth.currentUser?.displayName || auth.currentUser?.email || "Guest" },
     });
   };
 
@@ -33,7 +34,7 @@ function BoardEntry() {
         className="p-2 border rounded w-64"
         placeholder="e.g. acme-design"
         value={boardName}
-        onChange={(e) => setBoardName(e.target.value)}
+        onChange={(e) => setDisplayName(e.target.value)}
       />
       <button
         onClick={handleJoin}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import DraggableNote from "../components/DraggableNote";
 import socket from "../services/socketService";
@@ -11,7 +11,8 @@ function Board() {
   const { boardId } = useParams();
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState("");
+  const location = useLocation();
+  const [username, setUsername] = useState(location.state?.username || "");
   const [user, setUser] = useState(null);
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
