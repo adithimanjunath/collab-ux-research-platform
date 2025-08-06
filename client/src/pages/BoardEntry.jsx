@@ -7,7 +7,7 @@ function BoardEntry() {
   const navigate = useNavigate();
 
   const sanitizeBoardName = (name) =>
-  name.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9\-]/g, "");
+  name.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
   useEffect(() => {
   if (!auth.currentUser) {
