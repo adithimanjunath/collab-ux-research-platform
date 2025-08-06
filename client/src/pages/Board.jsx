@@ -5,7 +5,7 @@ import DraggableNote from "../components/DraggableNote";
 import socket from "../services/socketService";
 import { fetchNotesByBoard } from "../services/noteService";
 import {auth} from "../firebase"; // Import auth for user info
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, getAuth } from "firebase/auth";
 
 function Board() {
   const { boardId } = useParams();
@@ -50,7 +50,15 @@ useEffect(() => {
     if (!isLoggedIn || !boardId || !username) return;
     setIsLoading(true);
 
-    socket.emit("join_board", { boardId, username });
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    if(user){
+      user.getIdToken().then((token) => {
+        socket.emit("join_board", { boardId, username, token });  
+  });
+}
+
 
     fetchNotesByBoard(boardId)
       .then((data) => {

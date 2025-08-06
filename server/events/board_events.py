@@ -1,6 +1,7 @@
-from flask_socketio import emit, join_room
+from flask_socketio import emit, join_room, disconnect
 from services.note_service import create_note, update_note, delete_note, get_notes_by_board
 from db import notes_collection
+from firebase_admin import auth as firebase_auth
 
 online_users = {}
 
@@ -33,10 +34,24 @@ def register_socket_events(socketio):
 
     @socketio.on("join_board")
     def handle_join_board(data):
-        board_id, username = data.get("boardId"), data.get("username")
+        token = data.get("token")
+        board_id = data.get("boardId")
+        username = data.get("username")
+
+        if not token or not board_id or not username:
+            emit("error", {"message": "Missing token, boardId, or username"})
+            return disconnect()
+        try:
+            decoded_token = firebase_auth.verify_id_token(token)
+            uid = decoded_token.get("uid")
+            print(f"User {uid} joined board {board_id}")
+        except Exception as e:
+            print(f"Error verifying token: {e}")
+            emit("error", {"message": "Invalid token"})
+            return disconnect()
+          
         join_room(board_id)
         online_users.setdefault(board_id, set()).add(username)
-
         emit("user_list", list(online_users[board_id]), room=board_id)
 
         notes = get_notes_by_board(board_id)
