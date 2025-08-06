@@ -1,5 +1,5 @@
 import React, { useState,useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {auth} from "../firebase"; // Import auth for user info
 
 function BoardEntry() {
@@ -10,8 +10,6 @@ function BoardEntry() {
   name.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9\-]/g, "");
 
   useEffect(() => {
-  console.log("🚨 BoardEntry loaded!");
-
   if (!auth.currentUser) {
     navigate("/");
   }
@@ -43,6 +41,7 @@ function BoardEntry() {
       >
         Join Board
       </button>
+      <Link to="/" className="text-blue-500 px-6 py-2 rounded hover:underline"> Back</Link>
     </div>
   );
 }
