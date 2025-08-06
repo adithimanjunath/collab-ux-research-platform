@@ -13,6 +13,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        
         <Route path="/collab"
           element={
             <ProtectedRoute>
