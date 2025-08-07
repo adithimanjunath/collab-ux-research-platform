@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import {motion} from "framer-motion";
 
 const getNoteStyle = (type) => {
   switch (type) {
@@ -84,6 +85,22 @@ function DraggableNote({ note, onMove, onEdit, onDelete, isOwner }) {
   };
 
   return (
+    <motion.div
+    layout
+    initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ duration: 0.3 }}
+      className={`absolute w-52 min-h-[140px] max-h-[140px] p-4 rounded-lg overflow-hidden ${color} shadow-md border border-black/10 cursor-move transition-all duration-150 hover:shadow-xl hover:ring-2 ring-offset-1`}
+      drag
+      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+      style={{
+        left: position.x,
+        top: position.y,}}
+        >
+          onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
     <div
       className={`absolute w-52 min-h-[140px] max-h-[140px] p-4 rounded-lg overflow-hidden ${color} shadow-md border border-black/10 cursor-move transition-all duration-150 hover:shadow-xl hover:ring-2 ring-offset-1`}
       style={{
@@ -138,6 +155,9 @@ function DraggableNote({ note, onMove, onEdit, onDelete, isOwner }) {
         </div>
       )}
     </div>
+
+  </motion.div>
+      
   );
 }
 

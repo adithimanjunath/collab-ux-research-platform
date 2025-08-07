@@ -6,6 +6,7 @@ import socket from "../services/socketService";
 import { fetchNotesByBoard } from "../services/noteService";
 import {auth} from "../firebase"; // Import auth for user info
 import { onAuthStateChanged, getAuth } from "firebase/auth";
+import { AnimatePresence } from "framer-motion";
 
 function Board() {
   const { boardId } = useParams();
@@ -23,6 +24,20 @@ function Board() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
+
+ const [filter, setFilter] = useState({
+  note: true,
+  idea: true,
+  issue: true,
+  research: true,
+});
+
+const toggleNote = () => setFilter((prev) => ({ ...prev, note: !prev.note }));
+const toggleIdea = () => setFilter((prev) => ({ ...prev, idea: !prev.idea }));
+const toggleIssue = () => setFilter((prev) => ({ ...prev, issue: !prev.issue }));
+const toggleResearch = () => setFilter((prev) => ({ ...prev, research: !prev.research }));
+
+const filteredNotes = notes.filter((note) => filter[note.type]);
 
   useEffect(() => {
     setNotes([]);
@@ -50,23 +65,18 @@ useEffect(() => {
     if (!isLoggedIn || !boardId || !username) return;
     setIsLoading(true);
 
-    const auth = getAuth();
-    const user = auth.currentUser;
-
     if(user){
       user.getIdToken().then((token) => {
         socket.emit("join_board", { boardId, username, token });  
   });
 }
-
-
     fetchNotesByBoard(boardId)
       .then((data) => {
         setNotes(data.filter((n) => n.boardId === boardId));
       })
       .catch((err) => console.error("❌ Failed to load notes:", err.message))
       .finally(() => setIsLoading(false));
-  }, [boardId, isLoggedIn, username]);
+  }, [boardId, isLoggedIn, username, user]);
 
   useEffect(() => {
     socket.on("new_note", (note) => {
@@ -241,6 +251,7 @@ const isOverlapping = (pos) =>
 
   return (
     <div className="relative h-screen w-screen bg-neutral-100">
+
       {/* 🔒 Top input bar (fixed) */}
       <div className="fixed top-4 left-4 z-50 flex items-center space-x-2 bg-white px-4 py-2 shadow rounded">
         <input
@@ -268,17 +279,36 @@ const isOverlapping = (pos) =>
           Add
         </button>
       </div>
-
+      {/* 🔍 Filter Panel (outside canvas, below input bar) */}
+<div className="fixed top-[100px] left-8 z-40 w-40 p-5 bg-gray-100 border border-gray-300 rounded shadow-md space-y-2 text-sm">
+  <p className="font-medium text-gray-700 mb-2">Filter data by</p>
+  <label className="flex items-center gap-2">
+    <input type="checkbox" checked={filter.note} onChange={toggleNote} />
+    Note
+  </label>
+  <label className="flex items-center gap-2">
+    <input type="checkbox" checked={filter.idea} onChange={toggleIdea} />
+    Idea
+  </label>
+  <label className="flex items-center gap-2">
+    <input type="checkbox" checked={filter.issue} onChange={toggleIssue} />
+    Issue
+  </label>
+  <label className="flex items-center gap-2">
+    <input type="checkbox" checked={filter.research} onChange={toggleResearch} />
+    Research
+  </label>
+</div>
       {/* 🧍 Top-right online users row */}
       {onlineUsers.length > 0 && (
-        <div className="fixed top-4 right-4 z-50 flex items-center space-x-4">
+        <div className="fixed top-[160px] right-4 z-50 flex items-center space-x-4">
           {onlineUsers.map((user) => (
-            <div key={user} className="flex flex-col items-center">
+            <div key={user.uid || user} className="flex flex-col items-center">
               <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow">
-                {user.slice(0, 2).toUpperCase()}
+                {(user.displayName || user.name || user).slice(0, 2).toUpperCase()}
               </div>
               <span className="mt-1 text-xs text-gray-700 font-medium">
-                {user}
+                {user.displayName || user.name || user}
               </span>
             </div>
           ))}
@@ -290,7 +320,6 @@ const isOverlapping = (pos) =>
     Logged in as <strong>{user.displayName}</strong>
   </div>
 )}
-
 
       {/* 🎯 Main canvas area */}
       <div className="absolute inset-0 overflow-auto pt-[100px] flex justify-center items-start">
@@ -321,7 +350,8 @@ const isOverlapping = (pos) =>
              
             </div>
           ) : (
-            notes.map((note) => (
+          <AnimatePresence>
+            {filteredNotes.map((note) => (
               <DraggableNote
                 key={note.id}
                 note={note}
@@ -330,11 +360,12 @@ const isOverlapping = (pos) =>
                   socket.emit("edit_note", { ...updatedNote, boardId })
                 }
                 onDelete={(id) => socket.emit("delete_note", { id, boardId })}
-                isOwner={note.user === username}
+                isOwner={note.user?.uid === user?.uid}
               />
-            ))
+            ))}
+          </AnimatePresence>
           )}
-        </div>
+          </div>
       </div>
     </div>
     
