@@ -3,8 +3,7 @@ from urllib.parse import quote_plus
 
 # Escape special characters
 username = quote_plus("adithi")
-password = quote_plus("Adithi@1999")  # ← this contains @ which must be escaped
-
+password = quote_plus("Adithi@1999") 
 # Use the escaped values in your URI
 uri = f"mongodb+srv://{username}:{password}@cluster0.7frkuxc.mongodb.net/?retryWrites=true&w=majority&tlsAllowInvalidCertificates=true"
 
