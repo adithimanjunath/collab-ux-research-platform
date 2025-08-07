@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify,g
 from services.note_service import get_notes_by_board
 from db import notes_collection;
-from server.auth.auth_decorator import authenticate_request
+from auth.auth_decorator import authenticate_request
 
 
 note_bp = Blueprint("note_bp", __name__)
