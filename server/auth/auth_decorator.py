@@ -19,5 +19,6 @@ def authenticate_request(f):
             return jsonify({"error": "Invalid token", "details": str(e)}), 401
 
         return f(*args, **kwargs)
+    
 
     return decorated_function

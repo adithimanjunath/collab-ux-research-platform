@@ -1,7 +1,8 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify,g
 from services.note_service import get_notes_by_board
 from db import notes_collection;
-from auth_decorator import authenticate_request
+from server.auth.auth_decorator import authenticate_request
+
 
 note_bp = Blueprint("note_bp", __name__)
 
@@ -14,13 +15,13 @@ def home():
 def get_notes():
     board_id = request.args.get("boardId")
     if not board_id:
-        return jsonify({"error": "Missing boardId"}), 400
+        return jsonify([])
+    
+    user_email = g.user.get("email")
+    print(f"User email: {user_email}")
 
-    try:
-        notes = get_notes_by_board(board_id)
-        return jsonify(notes)
-    except Exception as e:
-        return jsonify({"error": "Internal server error"}), 500
+    return jsonify(get_notes_by_board(board_id))
+
     
 @note_bp.route("/api/notes/cleanup", methods=["POST"])
 def cleanup_notes_without_boardId():
