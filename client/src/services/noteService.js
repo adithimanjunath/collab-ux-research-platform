@@ -3,7 +3,7 @@ import {getAuthHeader} from "../utils/authHeader";
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5050";
 
 export const fetchNotesByBoard = async (boardId) => {
-  const headers = getAuthHeader();
+  const headers = await getAuthHeader();
   const res = await fetch(`${API_URL}/api/notes?boardId=${boardId}`,{
     headers,
   });

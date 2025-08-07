@@ -1,5 +1,3 @@
-// src/utils/authHeader.js
-
 import { auth } from "../firebase";
 
 export const getAuthHeader = async () => {
