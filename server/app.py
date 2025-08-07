@@ -3,9 +3,10 @@ eventlet.monkey_patch()
 from flask import Flask
 from flask_cors import CORS
 from flask_socketio import SocketIO
+
+from auth import firebase_config  # Ensure Firebase is initialized
 from routes.note_routes import note_bp
 from events.board_events import register_socket_events
-from auth import firebase_config 
 import logging, os
 from dotenv import load_dotenv
 
