@@ -5,7 +5,7 @@ import DraggableNote from "../components/DraggableNote";
 import socket from "../services/socketService";
 import { fetchNotesByBoard } from "../services/noteService";
 import {auth} from "../firebase"; // Import auth for user info
-import { onAuthStateChanged, getAuth } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { AnimatePresence } from "framer-motion";
 
 function Board() {
