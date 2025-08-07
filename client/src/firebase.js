@@ -1,16 +1,15 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserSessionPersistence, browserLocalPersistence ,GoogleAuthProvider,signInWithPopup, signOut } from "firebase/auth";
 
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAORWKaT2GpsIUD0NceWKKqpSArkCxBGEU",
-  authDomain: "collaborative-ux-research.firebaseapp.com",
-  projectId: "collaborative-ux-research",
-  storageBucket: "collaborative-ux-research.firebasestorage.app",
-  messagingSenderId: "1033054400179",
-  appId: "1:1033054400179:web:ff18f20cc03bb6eaa00ac6",
-  measurementId: "G-VDY6PB60RE"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase
