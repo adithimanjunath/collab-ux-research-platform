@@ -253,8 +253,6 @@ const isOverlapping = (pos) =>
     </div>
   );
 }
-
-
   return (
     <div className="relative h-screen w-screen bg-neutral-100">
 
@@ -308,16 +306,19 @@ const isOverlapping = (pos) =>
       {/* 🧍 Top-right online users row */}
       {onlineUsers.length > 0 && (
         <div className="fixed top-[160px] right-4 z-50 flex items-center space-x-4">
-          {onlineUsers.map((user) => (
-            <div key={user.uid || user} className="flex flex-col items-center">
-              <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow">
-                {(user.displayName || user.name || user).slice(0, 2).toUpperCase()}
+          {onlineUsers.map((user) => {
+            const name = typeof user === "string" ? user : user.displayName || user.name || user.email;
+            return (
+              <div key={user.uid || name} className="flex flex-col items-center">
+                <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow">
+                  {name.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="mt-1 text-xs text-gray-700 font-medium">
+                  {name}
+                </span>
               </div>
-              <span className="mt-1 text-xs text-gray-700 font-medium">
-                {user.displayName || user.name || user}
-              </span>
-            </div>
-          ))}
+            );
+          })}
 
         </div>
       )}
