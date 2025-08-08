@@ -2,7 +2,7 @@
 from functools import wraps
 from flask import g, request, jsonify
 from firebase_admin import auth as firebase_auth
-from  firebase_verify import verify_firebase_token
+from  auth.firebase_verify import verify_firebase_token
 
 # def authenticate_request(f):
 #     @wraps(f)
