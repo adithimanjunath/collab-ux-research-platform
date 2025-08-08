@@ -4,6 +4,14 @@ import InsightCards from '../components/InsightCards';
 import UserDelightSection from '../components/UserDelightSection';
 import { handleExportPDF } from '../services/pdfExport';
 
+ const quotes = [
+    "“Pay attention to what users do, not what they say.” – Jakob Nielsen",
+    "“Usability is not only about ease of use but also about bringing something meaningful.” – A. Marcus",
+    "“If the user can’t use it, it doesn’t work.” – Susan Dray",
+    "“Design is not just what it looks like and feels like. Design is how it works.” – Steve Jobs",
+    "“A user interface is like a joke. If you have to explain it, it’s not that good.”"
+  ];
+
 function ReportPage() {
   const [mode, setMode] = useState('paste');
   const [file, setFile] = useState(null);
@@ -14,14 +22,6 @@ function ReportPage() {
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [randomQuote, setRandomQuote] = useState('');
   const reportRef = useRef();
-
-  const quotes = [
-    "“Pay attention to what users do, not what they say.” – Jakob Nielsen",
-    "“Usability is not only about ease of use but also about bringing something meaningful.” – A. Marcus",
-    "“If the user can’t use it, it doesn’t work.” – Susan Dray",
-    "“Design is not just what it looks like and feels like. Design is how it works.” – Steve Jobs",
-    "“A user interface is like a joke. If you have to explain it, it’s not that good.”"
-  ];
 
   useEffect(() => {
     const interval = setInterval(() => {
