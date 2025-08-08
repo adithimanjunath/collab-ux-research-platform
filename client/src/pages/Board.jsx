@@ -305,8 +305,16 @@ const isOverlapping = (pos) =>
 </div>
       {/* 🧍 Top-right online users row */}
       {onlineUsers.length > 0 && (
-        <div className="fixed top-[160px] right-4 z-50 flex items-center space-x-4">
-          {onlineUsers.map((user, index) => {
+        <div className="absolute top-4 right-4 z-50 bg-white border-gray-200 shadow-md rounded-full px-4 py-2 flex items-center space-x-4">
+          <button
+            onClick={leaveBoard}
+            className="text-sm bg-red-100 text-red-600 hover:bg-red-200 px-3 py-1 rounded-full shadow-sm"
+            title="Leave Board">
+            Leave Board
+          </button>
+
+          <div className="relative flex items-center group space-x-1">
+            {onlineUsers.slice(0,4).map((user, index) => {
             let name = "User"
             if (typeof user === "string") {
               name = user;
@@ -316,19 +324,39 @@ const isOverlapping = (pos) =>
               else if (typeof user.email === "string") name = user.email;
             }
             return (
-              <div key={name || index} className="flex flex-col items-center">
-                <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow">
-                  {name.slice(0, 2).toUpperCase()}
-                </div>
-                <span className="mt-1 text-xs text-gray-700 font-medium">
-                  {name}
-                </span>
+              <div 
+              key={user.uid || name || index} 
+              className={`w-10 h-10 rounded-full border-2 border-white bg-purple-600 text-white flex items-center justify-center text-sm font-semibold shadow -ml-2 first:ml-0 z-${10 - index}`}
+              title={name}
+              >
+              {name.slice(0, 2).toUpperCase()}
               </div>
             );
           })}
+          {onlineUsers.length > 3 && (
+          <div className="w-10 h-10 rounded-full border-2 border-white bg-gray-300 text-gray 700 flex items-center justify-center text-sm font-semibold shadow -ml-2 z-0">
+            +{onlineUsers.length - 4} more
+          </div>
+        )}
+        <div className ="hidden group-hover:flex absolutetop-12 bg-white shadow lg rounded p3 border-gray-200 flex-col w-52">
+        <p className="mb-2 text-gray-600 font-medium">Online Users:</p>
+        <ul className="text-sm text-gray-500 space-y-1 max-h-40 overflow-auto">
+          {onlineUsers.map((user, index) => {
+            const name = typeof user === "string" 
+            ? user : user.displayName || user.name || user.email || "User";
+            return (
+              <li key={user.uid || name || index} className="truncate">
+                {name}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      </div>
+      </div>
+  )}
 
-        </div>
-      )}
+
       {user && (
   <div className="fixed top-4 left-1/2 transform -translate-x-1/2 text-sm text-gray-500">
     Logged in as <strong>{user.displayName}</strong>
@@ -338,11 +366,6 @@ const isOverlapping = (pos) =>
       {/* 🎯 Main canvas area */}
       <div className="absolute inset-0 overflow-auto pt-[100px] flex justify-center items-start">
         <div id="board-canvas" className="relative w-[1400px] min-h-[900px] h-[calc(100vh-150px)] bg-white rounded-xl shadow-xl border border-gray-300 overflow-hidden">
-          <div className="absolute top-[70px] left-4">
-            <button onClick={leaveBoard} className="text-sm bg-red-100 text-red-600 hover:bg-red-200 px-3 py-1 rounded shadow">
-              ← Leave Board
-            </button>
-          </div>
           <h1 className="absolute top-4 left-1/2 transform -translate-x-1/2 text-xl font-semibold text-gray-600">
             Board Name: {boardId}
           </h1>
