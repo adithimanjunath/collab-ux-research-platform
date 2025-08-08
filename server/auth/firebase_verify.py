@@ -1,3 +1,5 @@
+
+from auth import firebase_config
 from firebase_admin import auth as firebase_auth
 
 def verify_firebase_token(token):

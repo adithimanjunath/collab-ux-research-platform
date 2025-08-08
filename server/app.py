@@ -3,12 +3,13 @@ import os
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), 'server', '.env'))
 
+from auth import firebase_config
 import eventlet
 eventlet.monkey_patch()
 from flask import Flask
 from flask_cors import CORS
 from flask_socketio import SocketIO
-from auth import firebase_config
+
 
   # Ensure Firebase is initialized
 from routes.note_routes import note_bp
