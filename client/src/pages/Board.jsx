@@ -80,6 +80,7 @@ useEffect(() => {
 
   useEffect(() => {
     socket.on("new_note", (note) => {
+      console.log("🆕 New note received:", note);
       if (note.boardId !== boardId) return;
       setNotes((prev) => {
         const exists = prev.some((n) => n.id === note.id);
@@ -356,6 +357,7 @@ const isOverlapping = (pos) =>
             </div>
           ) : (
           <AnimatePresence>
+            console.log("📌 Filtered Notes:", filteredNotes);
             {filteredNotes.map((note) => (
             
               <DraggableNote
