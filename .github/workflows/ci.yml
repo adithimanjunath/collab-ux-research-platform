@@ -18,17 +18,42 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+      
+      - name: Cache Node modules
+        uses: actions/cache@v3
+        with:
+          path: client/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/client/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
-      - name: 📦 Install and build frontend
+      - name: 📦 Install frontend dependencies
         run: |
           cd client
-          npm install
+          npm ci
+
+      - name: Lint frontend
+        run: |
+          cd client
+          npm run lint
+      
+      - name: Build frontend
+        run: |
+          cd client
           npm run build
 
       - name: 🐍 Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+      
+      - name: Cache Python packages
+        uses: actions/cache@v3
+        with:
+          path: server/.cache
+          key: ${{ runner.os }}-python-${{ hashFiles('**/server/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: 📦 Install backend dependencies
         run: |
