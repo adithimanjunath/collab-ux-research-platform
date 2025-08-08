@@ -17,11 +17,22 @@ def register_socket_events(socketio):
             return
         
         board_id = data.get("boardId")
-        username = decoded.get("username") or decoded.get("email") or "Anonymous"
-          
+        username = {
+            "uid": decoded.get("uid"),
+            "email": decoded.get("email"),
+            "name": decoded.get("name") or decoded.get("displayName") or  decoded.get("email").split('@')[0]
+        }
+       
         join_room(board_id)
-        online_users.setdefault(board_id, set()).add(username)
-        emit("user_list", list(online_users[board_id]), room=board_id)
+        online_users.setdefault(board_id, set()).add(username["uid"])
+        emit("user_list", 
+             list(
+                {
+                    "uid": username["uid"],
+                    "name": username["name"],    
+                } for uid in online_users[board_id]
+             ), room=board_id)            
+     
 
         notes = get_notes_by_board(board_id)
         emit("board_notes", notes, room=board_id)
