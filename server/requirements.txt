@@ -5,3 +5,4 @@ eventlet
 gunicorn
 pymongo
 firebase-admin
+python-dotenv

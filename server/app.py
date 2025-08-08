@@ -1,19 +1,24 @@
+
+import os 
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), 'server', '.env'))
+
 import eventlet
 eventlet.monkey_patch()
 from flask import Flask
 from flask_cors import CORS
 from flask_socketio import SocketIO
+from auth import firebase_config
 
-from auth import firebase_config  # Ensure Firebase is initialized
+  # Ensure Firebase is initialized
 from routes.note_routes import note_bp
 from events.board_events import register_socket_events
-import logging, os
-from dotenv import load_dotenv
+import logging
+
+
 
 app = Flask(__name__)
 CORS(app, origins="*", supports_credentials=True)
-
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), 'server', '.env'))
 
 
 socketio = SocketIO(
