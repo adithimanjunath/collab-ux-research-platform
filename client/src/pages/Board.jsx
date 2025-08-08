@@ -306,10 +306,12 @@ const isOverlapping = (pos) =>
       {/* 🧍 Top-right online users row */}
       {onlineUsers.length > 0 && (
         <div className="fixed top-[160px] right-4 z-50 flex items-center space-x-4">
-          {onlineUsers.map((user) => {
-            const name = typeof user === "string" ? user : user.displayName || user.name || user.email;
+          {onlineUsers.map((user, index) => {
+            const name = typeof user === "string" ? user : "User"
+            console.log("🧍 onlineUsers:", onlineUsers);
+
             return (
-              <div key={user.uid || name} className="flex flex-col items-center">
+              <div key={name || index} className="flex flex-col items-center">
                 <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow">
                   {name.slice(0, 2).toUpperCase()}
                 </div>
