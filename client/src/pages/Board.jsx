@@ -315,7 +315,6 @@ const isOverlapping = (pos) =>
               else if (typeof user.name === "string") name = user.name;
               else if (typeof user.email === "string") name = user.email;
             }
-            
             return (
               <div key={name || index} className="flex flex-col items-center">
                 <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow">
