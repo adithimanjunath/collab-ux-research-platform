@@ -221,13 +221,16 @@ const isOverlapping = (pos) =>
     }
   };
 
-  socket.emit("create_note", newNote);
+  user.getIdToken().then((token) => {
+  socket.emit("create_note", { ...newNote, token });
+});
   setNoteText("");
 };
 
   const updateNotePosition = (id, x, y) => {
-    socket.emit("move_note", { id, x, y, boardId });
-    
+    user.getIdToken().then((token) => {
+      socket.emit("move_note", { id, x, y, boardId, token });
+    });
   };
 
   const handleKeyDown = (e) => {
@@ -237,7 +240,9 @@ const isOverlapping = (pos) =>
 
   const handleNoteInputChange = (e) => {
   setNoteText(e.target.value);
-  socket.emit("user_typing", { boardId, username });
+  user.getIdToken().then((token) => {
+    socket.emit("user_typing", { boardId, username, token });
+  });
 };
 
   if (!isLoggedIn) {
@@ -352,14 +357,17 @@ const isOverlapping = (pos) =>
           ) : (
           <AnimatePresence>
             {filteredNotes.map((note) => (
+            
               <DraggableNote
                 key={note.id}
                 note={note}
                 onMove={updateNotePosition}
                 onEdit={(updatedNote) =>
-                  socket.emit("edit_note", { ...updatedNote, boardId })
+                  user.getIdToken().then((token) => {
+                    socket.emit("edit_note", { ...updatedNote, token, boardId });
+                  })
                 }
-                onDelete={(id) => socket.emit("delete_note", { id, boardId })}
+                onDelete={(id) => user.getIdToken().then((token) => socket.emit("delete_note", { id, boardId, token }))}
                 isOwner={note.user?.uid === user?.uid}
               />
             ))}
