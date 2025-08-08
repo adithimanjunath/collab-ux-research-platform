@@ -307,9 +307,15 @@ const isOverlapping = (pos) =>
       {onlineUsers.length > 0 && (
         <div className="fixed top-[160px] right-4 z-50 flex items-center space-x-4">
           {onlineUsers.map((user, index) => {
-            const name = typeof user === "string" ? user : "User"
-            console.log("🧍 onlineUsers:", onlineUsers);
-
+            let name = "User"
+            if (typeof user === "string") {
+              name = user;
+            } else if (typeof user  === "object" && user != null) {
+              if (typeof user.displayName === "string") name = user.displayName;
+              else if (typeof user.name === "string") name = user.name;
+              else if (typeof user.email === "string") name = user.email;
+            }
+            
             return (
               <div key={name || index} className="flex flex-col items-center">
                 <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow">
