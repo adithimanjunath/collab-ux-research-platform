@@ -10,6 +10,7 @@ services:
     environment:
       - FLASK_ENV=development
       - MONGO_URI=mongodb://mongodb:27017/
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - mongodb
 
