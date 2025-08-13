@@ -5,24 +5,20 @@ const getNoteStyle = (type) => {
   switch (type) {
     case "idea":
       return {
-        color: "bg-yellow-300",
-        emoji: "💡",
+        color: "bg-amber-100",
       };
     case "issue":
       return {
-        color: "bg-red-300",
-        emoji: "❗",
+        color: "bg-red-200",
       };
     case "research":
       return {
-        color: "bg-green-200",
-        emoji: "🧪",
+        color: "bg-purple-100",
       };
     case "note":
     default:
       return {
-        color: "bg-blue-200",
-        emoji: "📌",
+        color: "bg-blue-100",
       };
   }
 };
@@ -94,7 +90,6 @@ function DraggableNote({ note, onMove, onEdit, onDelete, isOwner }) {
       }}
       onMouseDown={handleMouseDown}
       >
-       {/* ✅ New badge */}
     {Date.now() - new Date(note.createdAt || Date.now()).getTime() < 10000 && (
       <span className="absolute top-1 right-1 text-[10px] bg-green-500 text-white px-1 rounded">
         New
@@ -121,7 +116,7 @@ function DraggableNote({ note, onMove, onEdit, onDelete, isOwner }) {
             type="submit"
             data-no-drag
             onMouseDown={(e)=>e.stopPropagation()}
-            className="mt-2 bg-green-500 text-white px-3 py-1 text-sm rounded"
+            className="mt-2 bg-green-600 text-white px-3 py-1 text-sm rounded"
           >
             Save
           </button>
