@@ -10,9 +10,16 @@ function HomePage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
-        setUser({currentUser});
+       const mapped ={
+        name: currentUser.displayName || currentUser.email || "User",
+        email: currentUser.email,
+        uid: currentUser.uid
+       };
+       setUser(mapped);
+       localStorage.setItem("user", JSON.stringify(mapped));
       } else {
         setUser(null);
+        localStorage.removeItem("user")
       }
     });
     return () => unsubscribe();
@@ -42,8 +49,8 @@ function HomePage() {
       }
   };
 
-  const handleLogout = () => {
-    signOut(auth)
+  const handleLogout = async () => {
+    await signOut(auth)
     setUser(null);
     localStorage.removeItem("user");
   };
@@ -64,7 +71,7 @@ function HomePage() {
       ) : (
         <>
         <div className ="flex flex-col items-center space-y-2">
-          <img src ={user.photoURL} alt="avatar" className="w-24 h-24 rounded-full mb-2" />
+          <img src ={user.photoURL} alt={user.name} onError={(e) => { e.target.style.display = 'none'; }} className="w-24 h-24 rounded-full mb-2" />
           <p className="text-lg font-semibold">{user.name}</p>
           <p className="text-sm text-gray-600">{user.email}</p>
           <button onClick={handleLogout} className="mt-4 px-6 py-2 bg-red-400 text-white rounded-lg hover:bg-red-600">
@@ -82,9 +89,6 @@ function HomePage() {
         </div>
         </>
       )}
-      <footer className="absolute bottom-4 text-sm text-gray-500">
-        © 2025 Collaborative UX Research Platform | Made with by Adithi M Shrouthy
-      </footer>
     </div>
   );
 }
