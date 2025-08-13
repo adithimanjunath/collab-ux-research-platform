@@ -1,7 +1,8 @@
 from db import notes_collection
 
 def get_notes_by_board(board_id):
-    return list(notes_collection.find({"boardId": board_id}, {"_id": 0}))
+    cursor = notes_collection.find({"boardId":board_id}, {"_id":0, "user.email": 0})
+    return list(cursor)
 
 def create_note(note):
     if "boardId" not in note:
@@ -13,7 +14,7 @@ def create_note(note):
         "x": note["x"],
         "y": note["y"],
         "user": note["user"],
-        "boardId": note["boardId"],  # ✅ required!
+        "boardId": note["boardId"],
         "type": note.get("type", "note")
     })
 
