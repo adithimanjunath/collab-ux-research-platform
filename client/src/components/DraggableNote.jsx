@@ -29,7 +29,7 @@ const getNoteStyle = (type) => {
 
 function DraggableNote({ note, onMove, onEdit, onDelete, isOwner }) {
   const [dragging, setDragging] = useState(false);
-  const [position, setPosition] = useState({ x: note.x, y: note.y });
+  const [position] = useState({ x: note.x, y: note.y });
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(note.text);
 
