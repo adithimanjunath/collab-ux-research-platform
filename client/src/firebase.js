@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserSessionPersistence, browserLocalPersistence ,GoogleAuthProvider,signInWithPopup, signOut } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 
 const firebaseConfig = {
@@ -19,7 +20,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 const isDemo = window.location.hostname === "localhost" || window.location.hostname.includes === "vercel.app";
-setPersistence(auth, isDemo ? browserSessionPersistence : browserLocalPersistence)
+setPersistence(auth, browserSessionPersistence)
   .then(() => {
    console.log(`using ${isDemo ? 'session' : 'local'} persistence for auth`);
   }
@@ -28,3 +29,4 @@ setPersistence(auth, isDemo ? browserSessionPersistence : browserLocalPersistenc
   });
 export {auth, signInWithPopup, signOut};
 export const provider = new GoogleAuthProvider();
+export const db = getFirestore(app);

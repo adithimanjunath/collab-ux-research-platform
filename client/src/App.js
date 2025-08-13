@@ -5,6 +5,7 @@ import HomePage from "./pages/Homepage"; // Import the HomePage component
 import './index.css'; // Import your global styles
 import ReportPage from './pages/ReportPage';
 import ProtectedRoute from "./components/ProtectedRoutes"; // Import the ProtectedRoute component
+import AppLayout from "./layouts/AppLayout";
 
 
 
@@ -12,6 +13,7 @@ function App() {
   return (
     <Router>
       <Routes>
+        <Route element={<AppLayout/>}>
         <Route path="/" element={<HomePage />} />
         
         <Route path="/collab"
@@ -35,9 +37,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route path="*" element={<div className="p-10 text-center">Page Not Found</div>} />
-
+      </Route>
       </Routes>
     </Router>
   );
