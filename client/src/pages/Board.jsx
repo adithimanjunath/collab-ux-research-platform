@@ -1,381 +1,349 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
-import DraggableNote from "../components/DraggableNote";
-import socket from "../services/socketService";
 import { fetchNotesByBoard } from "../services/noteService";
-import {auth} from "../firebase"; // Import auth for user info
+import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { AnimatePresence } from "framer-motion";
+import {
+  doc,
+  setDoc,
+  deleteDoc,
+  serverTimestamp,
+  onSnapshot,
+  collection,
+} from "firebase/firestore";
+
+import Header from "../components/Header";
+import NoteInputBar from "../components/NoteInputBar";
+import TypingIndicator from "../components/TypingIndicator";
+import NotesCanvas from "../components/NoteCanvas";
+import FilterPanel from "../components/FilterPanel";
+import socket from "../services/socketService";
 
 function Board() {
   const { boardId } = useParams();
+  const boardRef = useRef(null);
   const navigate = useNavigate();
-  const firebaseUser = auth.currentUser;
-  const displayName = firebaseUser?.displayName || firebaseUser?.email || "";
-  const [username, setUsername] = useState(displayName);
-  
-  const [user, setUser] = useState(null);
 
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [user, setUser] = useState(null);
+  const [username, setUsername] = useState("");
+
   const [notes, setNotes] = useState([]);
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("note");
-  const [onlineUsers, setOnlineUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
+  const [showGrid, setShowGrid] = useState(true);
+  const [filter, setFilter] = useState({
+    note: false,
+    idea: false,
+    issue: false,
+    research: false,
+  });
 
- const [filter, setFilter] = useState({
-  note: true,
-  idea: true,
-  issue: true,
-  research: true,
-});
+  // ---------- Firestore Presence ----------
+  const joinBoardPresence = async (boardId, user) => {
+    const ref = doc(db, "boards", boardId, "onlineUsers", user.uid);
+    await setDoc(ref, {
+      uid: user.uid,
+      name: user.displayName || user.email || "User",
+      email: user.email || "",
+      joinedAt: serverTimestamp(),
+    });
+    window.addEventListener("beforeunload", () => {
+      deleteDoc(ref);
+    });
+  };
 
-const toggleNote = () => setFilter((prev) => ({ ...prev, note: !prev.note }));
-const toggleIdea = () => setFilter((prev) => ({ ...prev, idea: !prev.idea }));
-const toggleIssue = () => setFilter((prev) => ({ ...prev, issue: !prev.issue }));
-const toggleResearch = () => setFilter((prev) => ({ ...prev, research: !prev.research }));
+  const leaveBoardPresence = async (boardId, user) => {
+    const ref = doc(db, "boards", boardId, "onlineUsers", user.uid);
+    await deleteDoc(ref);
+  };
 
-const filteredNotes = notes.filter((note) => filter[note.type]);
+  const listenOnlineUsers = (boardId) => {
+    const q = collection(db, "boards", boardId, "onlineUsers");
+    return onSnapshot(q, (snapshot) => {
+      setOnlineUsers(snapshot.docs.map((doc) => doc.data()));
+    });
+  };
 
-  useEffect(() => {
-    setNotes([]);
-    setOnlineUsers([]);
-  }, [boardId]);
+  // ---------- Firestore Typing ----------
+  const handleNoteInputChange = (e) => {
+    setNoteText(e.target.value);
 
-useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-    if (currentUser) {
-      setUser(currentUser);
-      setUsername(currentUser.displayName || "Anonymous");
-      setIsLoggedIn(true);
-    } else {
-      setUser(null);
-      setUsername("");
-      setIsLoggedIn(false);
+    if (user && boardId) {
+      const typingRef = doc(db, "boards", boardId, "typing", user.uid);
+      setDoc(typingRef, {
+        uid: user.uid,
+        name: user.displayName || user.email || "User",
+        isTyping: true,
+        lastTyped: serverTimestamp(),
+      });
+
+      clearTimeout(window.typingTimeout);
+      window.typingTimeout = setTimeout(() => {
+        deleteDoc(typingRef);
+      }, 3000);
     }
-  });
+  };
 
-  return () => unsubscribe();
-}, []);
+  const listenTypingUsers = (boardId, user) => {
+    const typingColRef = collection(db, "boards", boardId, "typing");
+    return onSnapshot(typingColRef, (snapshot) => {
+      const usersTyping = snapshot.docs
+        .map((doc) => doc.data())
+        .filter((u) => u.uid !== user.uid && u.isTyping)
+        .map((u) => u.name);
+      setTypingUsers(usersTyping);
+    });
+  };
 
-
+  // ---------- Auth ----------
   useEffect(() => {
-    if (!isLoggedIn || !boardId || !username) return;
-    setIsLoading(true);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser || null);
+      setUsername(currentUser?.displayName || "Anonymous");
+      if (!currentUser) {
+        navigate("/login"); // redirect if not logged in
+      }
+    });
+    return () => unsubscribe();
+  }, [navigate]);
 
-    if(user){
-      user.getIdToken().then((token) => {
-        socket.emit("join_board", { boardId, username, token });  
-  });
-}
+  // ---------- Firestore Presence Listeners ----------
+  useEffect(() => {
+    if (boardId && user) {
+      joinBoardPresence(boardId, user);
+      const unsubPresence = listenOnlineUsers(boardId);
+      const unsubTyping = listenTypingUsers(boardId, user);
+      return () => {
+        leaveBoardPresence(boardId, user);
+        unsubPresence();
+        unsubTyping();
+      };
+    }
+  }, [boardId, user]);
+
+  // ---------- Load Notes from MongoDB on Mount/Refresh ----------
+  useEffect(() => {
+    if (!boardId || !user) return;
+
+    setIsLoading(true);
     fetchNotesByBoard(boardId)
       .then((data) => {
-        setNotes(data.filter((n) => n.boardId === boardId));
+        const arr = Array.isArray(data) ? data : [];
+        setNotes(arr.filter((n) => n.boardId === boardId));
       })
       .catch((err) => console.error("❌ Failed to load notes:", err.message))
       .finally(() => setIsLoading(false));
-  }, [boardId, isLoggedIn, username, user]);
+  }, [boardId, user]);
 
+  // ---------- Socket Connection ----------
   useEffect(() => {
-    socket.on("new_note", (note) => {
-      console.log("🆕 New note received:", note);
+    if (!boardId || !user) return;
+    const handleNewNote = (note) => {
       if (note.boardId !== boardId) return;
-      setNotes((prev) => {
-        const exists = prev.some((n) => n.id === note.id);
-        return exists ? prev : [...prev, note];
-      });
-    });
+      setNotes((prev) => prev.some((n) => n.id === note.id) ? prev : [...prev, note]);
+    };
 
-    socket.on("note_edited", (updatedNote) => {
+    const handleNoteEdited = (updatedNote) => {
       if (updatedNote.boardId !== boardId) return;
-      setNotes((prev) =>
-        prev.map((note) => (note.id === updatedNote.id ? updatedNote : note))
-      );
-    });
+      setNotes((prev) => prev.map((n) => n.id === updatedNote.id ? updatedNote : n));
+    };
 
-    socket.on("note_deleted", ({ id }) => {
-      setNotes((prev) => prev.filter((note) => note.id !== id));
-    });
+    const handleNoteDeleted = ({ id }) => {
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+    };
 
-    socket.on("note_moved", (updated) => {
+    const handleNoteMoved = (updated) => {
       if (updated.boardId !== boardId) return;
       setNotes((prev) =>
-        prev.map((note) =>
-          note.id === updated.id ? { ...note, x: updated.x, y: updated.y } : note
+        prev.map((n) =>
+          n.id === updated.id ? { ...n, x: updated.x, y: updated.y } : n
         )
       );
-    }
-  );
-  socket.on("user_typing", ({ username: typingUser }) => {
-  if (typingUser === username) return; // ignore self
-  setTypingUsers((prev) => {
-    if (!prev.includes(typingUser)) {
-      return [...prev, typingUser];
-    }
-    return prev;
-  });
-
-  // remove after timeout
-  setTimeout(() => {
-    setTypingUsers((prev) => prev.filter((u) => u !== typingUser));
-  }, 3000); // 3s delay
-});
-
-socket.on("load_existing_notes", (notes) => {
-  setNotes(notes);  // Replace current notes
-});
-
-    socket.on("user_list", (users) => setOnlineUsers(users));
-
-    return () => {
-      socket.off("new_note");
-      socket.off("note_edited");
-      socket.off("note_deleted");
-      socket.off("note_moved");
-      socket.off("user_list");
-      socket.off("user_typing");
-      socket.off("load_existing_notes");
     };
-  }, [boardId, username]);
 
-  useEffect(() => {
-    return () => {
-      if (boardId && username) {
-        socket.emit("leave_board", { boardId, username });
+    const handleLoadExisting = (existing) => {
+    // defensive: make sure it's an array
+    const arr = Array.isArray(existing) ? existing : [];
+    setNotes(arr.filter((n) => n.boardId === boardId));
+  };
+
+
+    socket.on("new_note", handleNewNote);
+    socket.on("note_edited", handleNoteEdited);
+    socket.on("note_deleted", handleNoteDeleted);
+    socket.on("note_moved", handleNoteMoved);
+    socket.on("load_existing_notes", handleLoadExisting);
+
+    (async () => {
+      const token = await user.getIdToken();
+      socket.auth = { token };
+
+      socket.once("connect", () => {
+        socket.emit("join_board", { boardId, token });
+        socket.emit("request_existing_notes", {boardId, token})
+      });
+
+      if (socket.connected) {
+        socket.disconnect();
       }
+      socket.connect();
+    })();
+       return () => {
+      socket.off("new_note", handleNewNote);
+      socket.off("note_edited", handleNoteEdited);
+      socket.off("note_deleted", handleNoteDeleted);
+      socket.off("note_moved", handleNoteMoved);
+      socket.off("load_existing_notes", handleLoadExisting);
+      socket.disconnect()
     };
-  }, [boardId, username]);
+  }, [boardId, user]);
 
-  const leaveBoard = () => {
-    socket.emit("leave_board", { boardId, username });
-    setIsLoggedIn(false);
-    setUsername("");
-    setNotes([]);
-    navigate("/");
+  // ---------- Actions ----------
+  const handleEditNote = (updatedNote) => {
+    setNotes((prev) => prev.map((n) => n.id === updatedNote.id ? updatedNote : n));
+    user.getIdToken().then((token) =>
+      socket.emit("edit_note", { ...updatedNote, token, boardId })
+    );
   };
 
   const addNote = () => {
-  if (!noteText.trim()) return;
+    if (!noteText.trim() || !boardRef.current) return;
 
-  const canvasWidth = 1400;
-  const canvasHeight = 900;
-  const noteWidth = 208;  // tailwind w-52 = 208px
-  const noteHeight = 140; // estimated height
-  const padding = 16;
+    const rect = boardRef.current.getBoundingClientRect();
+    const NOTE_W = 208, NOTE_H = 140, PAD = 16, MAX_TRIES = 400;
 
-  const cols = Math.floor((canvasWidth - padding * 2) / (noteWidth + padding));
-  const rows = Math.floor((canvasHeight - padding * 2) / (noteHeight + padding));
+    const reservedZones = [
+      { x: 0, y: 60, width: 220, height: 100 },
+      { x: 550, y: 0, width: 300, height: 60 },
+    ];
 
-  // Generate grid positions
-  const positions = [];
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const x = padding + col * (noteWidth + padding);
-      const y = padding + row * (noteHeight + padding);
-      positions.push({ x, y });
+    const fits = (x, y) =>
+      x >= PAD &&
+      y >= PAD &&
+      x + NOTE_W <= rect.width - PAD &&
+      y + NOTE_H <= rect.height - PAD;
+
+    const overlapsNotes = (x, y) =>
+      notes.some((n) => Math.abs(n.x - x) < NOTE_W && Math.abs(n.y - y) < NOTE_H);
+
+    const overlapsReserved = (x, y) =>
+      reservedZones.some((z) => x < z.x + z.width && x + NOTE_W > z.x && y + NOTE_H > z.y);
+
+    let placed = null;
+    for (let i = 0; i < MAX_TRIES; i++) {
+      const x = Math.floor(PAD + Math.random() * (rect.width - NOTE_W - 2 * PAD));
+      const y = Math.floor(PAD + Math.random() * (rect.height - NOTE_H - 2 * PAD));
+      if (fits(x, y) && !overlapsReserved(x, y) && !overlapsNotes(x, y)) {
+        placed = { x, y };
+        break;
+      }
     }
-  }
 
-  // Find the first available (non-overlapping) position
-  const reservedZone = [
-    {x: 0, y: 60, width: 220,height: 100},
-    {x:550, y:0, width:300, height: 60},
-  ]
-  
-
-
-const isOverlapping = (pos) =>
-  notes.some(
-    (n) =>
-      Math.abs(n.x - pos.x) < noteWidth &&
-      Math.abs(n.y - pos.y) < noteHeight
-  ) ||
-  reservedZone.some(
-    (zone) =>
-      pos.x < zone.x + zone.width &&
-      pos.x + noteWidth > zone.x &&
-      pos.y < zone.y + zone.height &&
-      pos.y + noteHeight > zone.y
-  );
-
-
-  const availablePos = positions.find((pos) => !isOverlapping(pos));
-
-  if (!availablePos) {
-    alert("❌ No space left on the board!");
-    return;
-  }
-
-  const newNote = {
-    id: uuidv4(),
-    text: noteText,
-    x: availablePos.x,
-    y: availablePos.y,
-    boardId,
-    type: noteType,
-    user:{
-      name: user?.displayName ||"Anonymous",
-      email: user?.email,
-      uid: user?.uid
+    if (!placed) {
+      alert("❌ No space left on the board.");
+      return;
     }
+
+    const newNote = {
+      id: uuidv4(),
+      text: noteText,
+      x: placed.x,
+      y: placed.y,
+      boardId,
+      type: noteType,
+      createdAt: new Date().toISOString(),
+      user: {
+        uid: user?.uid,
+        name: user?.displayName || "Anonymous",
+        email: user?.email,
+      },
+    };
+
+    setNotes((prev) => [...prev, newNote]);
+    user.getIdToken().then((token) => {
+      socket.emit("create_note", { ...newNote, token });
+    });
+    setNoteText("");
   };
 
-  user.getIdToken().then((token) => {
-  socket.emit("create_note", { ...newNote, token });
-});
-  setNoteText("");
-};
-
   const updateNotePosition = (id, x, y) => {
+    setNotes((prev) => prev.map((n) => n.id === id ? { ...n, x, y } : n));
     user.getIdToken().then((token) => {
       socket.emit("move_note", { id, x, y, boardId, token });
     });
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && e.ctrlKey) 
-      {addNote();}
+  const handleDeleteNote = (id) => {
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+    user.getIdToken().then((token) =>
+      socket.emit("delete_note", { id, boardId, token })
+    );
   };
 
-  const handleNoteInputChange = (e) => {
-  setNoteText(e.target.value);
-  user.getIdToken().then((token) => {
-    socket.emit("user_typing", { boardId, username, token });
-  });
-};
+  const leaveBoard = async () => {
+    if (user) await leaveBoardPresence(boardId, user);
+    navigate("/");
+  };
 
-  if (!isLoggedIn) {
-  return (
-    <div className="h-screen flex items-center justify-center">
-      <p className="text-xl text-gray-500">Please log in to access the board.</p>
-    </div>
-  );
-}
+  const toggleGrid = () => {
+    setShowGrid((prev) => !prev);
+  };
+
+  const filteredNotes = useMemo(() => {
+    const arr = Array.isArray(notes) ? notes : [];
+    const anyChecked = Object.values(filter).some(Boolean);
+    if (!anyChecked) return notes;
+    return arr.filter((n) => filter[n?.type] ?? false);
+  }, [notes, filter]);
+
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="relative h-screen w-screen bg-neutral-100">
+      <NoteInputBar
+        noteText={noteText}
+        onTextChange={handleNoteInputChange}
+        onKeyDown={(e) => e.key === "Enter" && e.ctrlKey && addNote()}
+        onAdd={addNote}
+        noteType={noteType}
+        onTypeChange={(e) => setNoteType(e.target.value)}
+      />
 
-      {/* 🔒 Top input bar (fixed) */}
-      <div className="fixed top-4 left-4 z-50 flex items-center space-x-2 bg-white px-4 py-2 shadow rounded">
-        <input
-          type="text"
-          value={noteText}
-          onChange={handleNoteInputChange}
-          onKeyDown={handleKeyDown}
-          className="border p-2 rounded"
-          placeholder="Type a note..."
-        />
-        <select
-          value={noteType}
-          onChange={(e) => setNoteType(e.target.value)}
-          className="border p-2 rounded"
+      <FilterPanel
+        filter={filter}
+        onToggle={(type) => setFilter((prev) => ({ ...prev, [type]: !prev[type] }))}
+      />
+
+      <Header
+        onlineUsers={onlineUsers}
+        user={user}
+        onLeave={leaveBoard}
+        onToggleGrid={toggleGrid}
+      />
+
+      <div className="h-full pt-[100px] flex justify-center items-center overflow-hidden">
+        <div
+          ref={boardRef}
+          className="relative w-[1400px] max-w-full h-[900px] max-h-full rounded-xl shadow-xl border border-gray-150 overflow-hidden"
+          style={{
+            backgroundColor: "#e5e7eb",
+            backgroundImage: showGrid
+              ? "linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)"
+              : "none",
+            backgroundSize: "10px 10px",
+          }}
         >
-          <option value="note">Note</option>
-          <option value="idea">Idea</option>
-          <option value="issue">Issue</option>
-          <option value="research">Research</option>
-        </select>
-        <button
-          onClick={addNote}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          Add
-        </button>
-      </div>
-      {/* 🔍 Filter Panel (outside canvas, below input bar) */}
-<div className="fixed top-[100px] left-8 z-40 w-40 p-5 bg-gray-100 border border-gray-300 rounded shadow-md space-y-2 text-sm">
-  <p className="font-medium text-gray-700 mb-2">Filter data by</p>
-  <label className="flex items-center gap-2">
-    <input type="checkbox" checked={filter.note} onChange={toggleNote} />
-    Note
-  </label>
-  <label className="flex items-center gap-2">
-    <input type="checkbox" checked={filter.idea} onChange={toggleIdea} />
-    Idea
-  </label>
-  <label className="flex items-center gap-2">
-    <input type="checkbox" checked={filter.issue} onChange={toggleIssue} />
-    Issue
-  </label>
-  <label className="flex items-center gap-2">
-    <input type="checkbox" checked={filter.research} onChange={toggleResearch} />
-    Research
-  </label>
-</div>
-      {/* 🧍 Top-right online users row */}
-      {onlineUsers.length > 0 && (
-        <div className="absolute top-4 right-4 z-50 bg-white border-gray-200 shadow-md rounded-full px-4 py-2 flex items-center space-x-4">
-          <button
-            onClick={leaveBoard}
-            className="text-sm bg-red-100 text-red-600 hover:bg-red-200 px-3 py-1 rounded-full shadow-sm"
-            title="Leave Board">
-            Leave Board
-          </button>
-
-          <div className="relative flex items-center group space-x-1">
-            {onlineUsers.slice(0,4).map((user, index) => {
-            let name = "User"
-            if (typeof user === "string") {
-              name = user;
-            } else if (typeof user  === "object" && user != null) {
-              if (typeof user.displayName === "string") name = user.displayName;
-              else if (typeof user.name === "string") name = user.name;
-              else if (typeof user.email === "string") name = user.email;
-            }
-            return (
-              <div 
-              key={user.uid || name || index} 
-              className={`w-10 h-10 rounded-full border-2 border-white bg-purple-600 text-white flex items-center justify-center text-sm font-semibold shadow -ml-2 first:ml-0 z-${10 - index}`}
-              title={name}
-              >
-              {name.slice(0, 2).toUpperCase()}
-              </div>
-            );
-          })}
-          {onlineUsers.length > 3 && (
-          <div className="w-10 h-10 rounded-full border-2 border-white bg-gray-300 text-gray 700 flex items-center justify-center text-sm font-semibold shadow -ml-2 z-0">
-            +{onlineUsers.length - 4} more
-          </div>
-        )}
-        <div className ="hidden group-hover:flex absolutetop-12 bg-white shadow lg rounded p3 border-gray-200 flex-col w-52">
-        <p className="mb-2 text-gray-600 font-medium">Online Users:</p>
-        <ul className="text-sm text-gray-500 space-y-1 max-h-40 overflow-auto">
-          {onlineUsers.map((user, index) => {
-            const name = typeof user === "string" 
-            ? user : user.displayName || user.name || user.email || "User";
-            return (
-              <li key={user.uid || name || index} className="truncate">
-                {name}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-      </div>
-      </div>
-  )}
-
-
-      {user && (
-  <div className="fixed top-4 left-1/2 transform -translate-x-1/2 text-sm text-gray-500">
-    Logged in as <strong>{user.displayName}</strong>
-  </div>
-)}
-
-      {/* 🎯 Main canvas area */}
-      <div className="absolute inset-0 overflow-auto pt-[100px] flex justify-center items-start">
-        <div id="board-canvas" className="relative w-[1400px] min-h-[900px] h-[calc(100vh-150px)] bg-white rounded-xl shadow-xl border border-gray-300 overflow-hidden">
-          <h1 className="absolute top-4 left-1/2 transform -translate-x-1/2 text-xl font-semibold text-gray-600">
-            Board Name: {boardId}
+          <h1 className="absolute top-3 left-1/2 transform -translate-x-1/2 text-xl font-bold text-gray-700 tracking-wide">
+            📋 Board Name: {boardId}
           </h1>
-          {typingUsers.length > 0 && (
-  <div className="absolute top-16 left-1/2 transform -translate-x-1/2 text-sm text-gray-500 font-medium flex flex-col items-center z-50">
-    {typingUsers.map((user) => (
-      <div key={user} className="animate-pulse">✍️ {user} is typing...</div>
-    ))}
-  </div>
-)}
+
+          {typingUsers.length > 0 && <TypingIndicator typingUsers={typingUsers} />}
 
           {isLoading ? (
             <div className="h-full flex justify-center items-center">
@@ -383,33 +351,21 @@ const isOverlapping = (pos) =>
             </div>
           ) : notes.length === 0 ? (
             <div className="h-full flex justify-center items-center text-gray-400 italic">
-              <p>No notes yet — add your first one! </p>
-             
+              <p>No notes yet — add your first one!</p>
             </div>
           ) : (
-          <AnimatePresence>
-            console.log("📌 Filtered Notes:", filteredNotes);
-            {filteredNotes.map((note) => (
-            
-              <DraggableNote
-                key={note.id}
-                note={note}
-                onMove={updateNotePosition}
-                onEdit={(updatedNote) =>
-                  user.getIdToken().then((token) => {
-                    socket.emit("edit_note", { ...updatedNote, token, boardId });
-                  })
-                }
-                onDelete={(id) => user.getIdToken().then((token) => socket.emit("delete_note", { id, boardId, token }))}
-                isOwner={note.user?.uid === user?.uid}
-              />
-            ))}
-          </AnimatePresence>
+            <NotesCanvas
+              filteredNotes={filteredNotes}
+              isLoading={isLoading}
+              onMove={updateNotePosition}
+              onEdit={handleEditNote}
+              onDelete={handleDeleteNote}
+              currentUid={user?.uid}
+            />
           )}
-          </div>
+        </div>
       </div>
     </div>
-    
   );
 }
 
