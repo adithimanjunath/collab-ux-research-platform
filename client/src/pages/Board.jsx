@@ -332,11 +332,11 @@ function Board() {
           ref={boardRef}
           className="relative w-[1400px] max-w-full h-[900px] max-h-full rounded-xl shadow-xl border border-gray-150 overflow-hidden"
           style={{
-            backgroundColor: "#eef2ff",
+            backgroundColor: "#f9fafb",
             backgroundImage: showGrid
               ? "linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)"
               : "none",
-            backgroundSize: "20px 20px",
+            backgroundSize: "45px 45px",
           }}
         >
           <h1 className="absolute top-3 left-1/2 transform -translate-x-1/2 text-xl font-bold text-gray-700 tracking-wide">
