@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify,g
 from services.note_service import get_notes_by_board
 from db import notes_collection
 from auth.auth_decorator import authenticate_request
-from db import mongo
+from db import MongoClient
 
 
 note_bp = Blueprint("note_bp", __name__)
