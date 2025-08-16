@@ -109,7 +109,7 @@ function Board() {
       }
     });
     return () => unsubscribe();
-  }, [navigate]);
+  }, [navigate,setUsername]);
 
   // ---------- Firestore Presence Listeners ----------
   useEffect(() => {
