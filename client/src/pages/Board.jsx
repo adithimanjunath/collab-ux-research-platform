@@ -28,7 +28,7 @@ function Board() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
   const [user, setUser] = useState(null);
-  const [username, setUsername] = useState("");
+  const [setUsername] = useState("");
 
   const [notes, setNotes] = useState([]);
   const [noteText, setNoteText] = useState("");
