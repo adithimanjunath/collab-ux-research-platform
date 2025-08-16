@@ -5,7 +5,7 @@ const getNoteStyle = (type) => {
   switch (type) {
     case "idea":
       return {
-        color: "bg-amber-100",
+        color: "bg-green-100",
       };
     case "issue":
       return {
@@ -18,7 +18,7 @@ const getNoteStyle = (type) => {
     case "note":
     default:
       return {
-        color: "bg-blue-100",
+        color: "bg-amber-100",
       };
   }
 };
