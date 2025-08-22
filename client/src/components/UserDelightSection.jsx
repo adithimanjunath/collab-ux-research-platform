@@ -1,57 +1,181 @@
-import React from 'react';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import React,{useState} from "react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import ChartLegend from "./ChartLegend";
+import { Card, CardContent, CardHeader, Typography, Divider, Box,Stack } from "@mui/material";
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+const PASTELS = ["#BAE6FD","#A7F3D0","#FDE68A","#FBCFE8","#C7D2FE","#FCA5A5"];
 
-function UserDelightSection() {
-  const delightData = [
-    { name: 'UI Design', value: 40 },
-    { name: 'Performance', value: 25 },
-    { name: 'Features', value: 20 },
-    { name: 'Animations', value: 15 }
-  ];
+export function DelightNotes({ highlights = [], expandAll = false  }) {
+  const [expandedTag, setExpandedTag] = useState({});
+ 
+
+  // Normalize input to entries like [{ tag, items }]
+  const entries = Array.isArray(highlights)
+    ? (highlights.length > 0
+        ? [{ tag: "Notes", items: highlights }]
+        : [])
+    : Object.entries(highlights || {}).map(([tag, items]) => ({
+        tag,
+        items: Array.isArray(items) ? items : [],
+      }));
+
+  const has = entries.length > 0;
+
+  const toggleExpand = (tag) => {
+    setExpandedTag((prev) => ({ ...prev, [tag]: !prev[tag] }));
+  };
+
+  const MAX = 4; // max items per theme before “more”
 
   return (
-    <div className="bg-gray-50 p-4 rounded-lg shadow">
-      <h2 className="text-lg font-semibold text-gray-800 mb-4">🎉 User Delight Moments</h2>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-        {/* Quotes */}
-        <div className="bg-white p-4 rounded-md shadow-sm h-full flex flex-col">
-          <h3 className="text-md font-semibold text-gray-700 mb-2">💬 Quotes That Sparked Joy</h3>
-          <ul className="list-disc text-gray-700 space-y-2 ml-4">
-            <li>“Love the dark mode option.”</li>
-            <li>“The drag-and-drop upload felt magical.”</li>
-            <li>“Animations made the experience smooth.”</li>
-            <li>“Minimalistic design was calming.”</li>
-          </ul>
-        </div>
+    <Card
+      variant="outlined"
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: 3,
+        boxShadow: 2,
+        height: "100%",
+        width: "100%",
+      }}
+    >
+      <CardHeader
+        title={<Typography variant="h6" sx={{ fontWeight: 600 }}>User Delight — Notes</Typography>}
+      />
+      <Divider />
+      <CardContent sx={{ flex: 1, overflow: "auto" }}>
+        {has ? (
+          <Stack spacing={2.5}>
+            {entries.map(({ tag, items }) => {
+              const extra = Math.max(0, items.length - MAX);
+              const isExpanded = expandAll || !!expandedTag[tag];
+              const itemsToShow = isExpanded ? items : items.slice(0, MAX);
 
-        {/* Pie Chart */}
-        <div className="bg-white p-4 rounded-md shadow-sm h-full flex flex-col">
-          <h3 className="text-md font-semibold text-gray-700 mb-2">📊 Delight Distribution</h3>
-          <ResponsiveContainer width="100%" height={240}>
-            <PieChart>
-              <Pie
-                dataKey="value"
-                nameKey="name"
-                data={delightData}
-                cx="50%"
-                cy="50%"
-                outerRadius={75}
-                label
-              >
-                {delightData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
+              return (
+                <Box key={tag}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="subtitle1" color="primary">{tag}</Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        px: 1,
+                        py: 0.2,
+                        borderRadius: "8px",
+                        bgcolor: "primary.light",
+                        color: "primary.dark",
+                      }}
+                    >
+                      {items.length}
+                    </Typography>
+                  </Box>
+
+                  <ul style={{ paddingLeft: 16, margin: "8px 0" }}>
+                    {itemsToShow.map((q, i) => (
+                      <li key={i}>
+                        <Typography variant="body2" color="text.secondary">{q}</Typography>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {!expandAll && extra > 0 && (
+                    <Typography
+                      variant="caption"
+                      color="primary"
+                      onClick={() => toggleExpand(tag)}
+                      sx={{ cursor: "pointer", fontWeight: 500, pl: 0.5, mt: 0.5, display: "inline-block" }}
+                    >
+                      {isExpanded ? "Show less" : `+${extra} more`}
+                    </Typography>
+                  )}
+                </Box>
+              );
+            })}
+          </Stack>
+        ) : (
+          <Box display="flex" alignItems="center" justifyContent="center" height="100%">
+            <Typography variant="body2" color="text.secondary" align="center" sx={{ px: 2 }}>
+              No specific user delight moments were found in the data.
+            </Typography>
+          </Box>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
-export default UserDelightSection;
+export function DelightChart({ data = [], isLoading = false, expandAll = false }) {
+  // consider “hasData” only when there’s at least one positive value
+  const hasData = Array.isArray(data) && data.some(d => (d?.value ?? 0) > 0);
+
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        height: "100%",
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: 3,
+        boxShadow: 2,
+      }}
+    >
+      <CardHeader
+        title={<Typography variant="h6" sx={{ fontWeight: 600 }}>Delight Distribution</Typography>}
+        action={
+          <Typography variant="caption" color="text.secondary">
+            {isLoading ? "loading…" : hasData ? `${data.length}` : "—"}
+          </Typography>
+        }
+      />
+      <Divider />
+      <CardContent sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* EMPTY state: plain HTML, no chart/legend */}
+        {!hasData ? (
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 220,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "text.secondary",
+              textAlign: "center",
+              px: 2,
+            }}
+          >
+            <Typography variant="body2">
+              No specific user delight moments were found in the data.
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            <Box sx={{ width: "100%", height: 240 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <Pie
+                    data={data}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="40%"
+                    outerRadius="70%"
+                    isAnimationActive={false}
+                  >
+                    {data.map((_, i) => (
+                      <Cell key={i} fill={PASTELS[i % PASTELS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </Box>
+            {/* Show legend ONLY when we have data */}
+            < ChartLegend data={data} colors={PASTELS} />
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+export default function UserDelightSection(){ return null; }
