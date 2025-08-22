@@ -1,16 +1,20 @@
-import React, { useState, useRef, useEffect } from 'react';
+// ReportPage.jsx
+import { useState, useRef, useEffect } from 'react';
 import InputPanel from '../components/InputPanel';
 import InsightCards from '../components/InsightCards';
-import UserDelightSection from '../components/UserDelightSection';
-import { handleExportPDF } from '../services/pdfExport';
+import ResultsModal from '../components/ResultsModal';
+import ResultsPreview from '../components/ResultsPreview';
+import Button from "@mui/material/Button";
+import Header from '../components/Header';
+import { useTheme } from '@mui/material';
 
- const quotes = [
-    "“Pay attention to what users do, not what they say.” – Jakob Nielsen",
-    "“Usability is not only about ease of use but also about bringing something meaningful.” – A. Marcus",
-    "“If the user can’t use it, it doesn’t work.” – Susan Dray",
-    "“Design is not just what it looks like and feels like. Design is how it works.” – Steve Jobs",
-    "“A user interface is like a joke. If you have to explain it, it’s not that good.”"
-  ];
+const quotes = [
+  '“Pay attention to what users do, not what they say.” – Jakob Nielsen',
+  '“Usability is not only about ease of use but also about bringing something meaningful.” – A. Marcus',
+  '“If the user can’t use it, it doesn’t work.” – Susan Dray',
+  '“Design is not just what it looks like and feels like. Design is how it works.” – Steve Jobs',
+  '“A user interface is like a joke. If you have to explain it, it’s not that good.”',
+];
 
 function ReportPage() {
   const [mode, setMode] = useState('paste');
@@ -19,46 +23,54 @@ function ReportPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [randomQuote, setRandomQuote] = useState('');
+  const openResults = ()=> setShowResults(true)
+  const handleLeave = () => window.history.back();
   const reportRef = useRef();
+  const theme = useTheme();
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setQuoteIndex(prev => (prev + 1) % quotes.length);
-    }, 8000);
-    return () => clearInterval(interval);
+    const id = setInterval(() => setQuoteIndex((p) => (p + 1) % quotes.length), 8000);
+    return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    setRandomQuote(quotes[quoteIndex]);
-  }, [quoteIndex]);
+  useEffect(() => setRandomQuote(quotes[quoteIndex]), [quoteIndex]);
 
   const handleUpload = async () => {
     if ((mode === 'upload' && !file) || (mode === 'paste' && !textInput.trim())) return;
     setIsLoading(true);
     setHasAnalyzed(true);
+    try {
+      const form = new FormData();
+      if (mode === 'upload') form.append('file', file);
+      else form.append('text', textInput);
 
-    await new Promise((res) => setTimeout(res, 1000));
+      const API_BASE =
+        window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? 'http://localhost:5050'
+          : `${window.location.protocol}//${window.location.host}`;
 
-    const mockData = {
-      top_insight: 'Users struggle with onboarding due to inconsistent labels.',
-      pie_data: [
-        { name: 'Usability', value: 12 },
-        { name: 'Performance', value: 6 },
-        { name: 'Accessibility', value: 4 },
-        { name: 'Content', value: 8 }
-      ],
-      insights: {
-        Usability: ['Dropdowns are unclear.', 'Labels not consistent.'],
-        Performance: ['Login is slow.', 'Scroll interaction lags.'],
-        Accessibility: ['Low contrast text.', 'No keyboard support.'],
-        Content: ['Too much jargon.', 'Lacks tooltip help.']
-      }
-    };
+      const res = await fetch(`${API_BASE}/api/ux/analyze`, { method: 'POST', body: form });
+      if (!res.ok) throw new Error((await res.text()) || 'Request failed');
 
-    setReportData(mockData);
-    setIsLoading(false);
+      const data = await res.json();
+      setReportData({
+        top_insight: data.top_insight,
+        pie_data: data.pie_data,
+        insights: data.insights,
+        positive_highlights: data.positive_highlights,
+        delight_distribution: data.delight_distribution ?? data.delightDistribution ?? [],
+      });
+      setHasAnalyzed(true);
+      setShowResults(true);
+    } catch (err) {
+      console.error(err);
+      alert(`Analysis failed. ${err.message || 'Check console for details.'}`);
+      setHasAnalyzed(false);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleReset = () => {
@@ -70,53 +82,88 @@ function ReportPage() {
   };
 
   return (
-    
-    <div className="w-full min-h-screen bg-gray-50">
-      <div
-        className={`flex transition-all duration-500 ease-in-out ${
-          hasAnalyzed
-            ? 'flex-col lg:flex-row gap-6 px-6 py-6 items-start'
-            : 'items-center justify-center h-screen'
-        }`}
-      >
-        {/* Sidebar Wrapper */}
-        <div
-          className={`transition-all duration-500 ${
-            hasAnalyzed ? 'w-full max-w-xs' : ''
-          }`}
-        >
-          <div className="w-[300px] min-h-[620px] bg-white p-6 rounded-xl shadow mx-auto">
-            <InputPanel
-              mode={mode}
-              setMode={setMode}
-              file={file}
-              setFile={setFile}
-              textInput={textInput}
-              setTextInput={setTextInput}
-              isLoading={isLoading}
-              handleUpload={handleUpload}
-              hasAnalyzed={hasAnalyzed}
-              handleReset={handleReset}
-              handleExportPDF={() => handleExportPDF(reportRef)}
-              randomQuote={randomQuote}
-            />
-          </div>
+  <div className="min-h-screen w-full" style={{ backgroundColor: theme.palette.background.default }}>
+  <Header mode="report" title="UX Toolkit" onLeave={handleLeave}>
+  {/* Help = low emphasis → text button */}
+  <Button 
+    variant="text"
+    color="primary"
+    size="small"
+    onClick={() => alert("Please make sure that the data in file is in the format of Q: and A:. Documnets should be in PDF Format only ")}
+  >
+    Help
+  </Button>
+</Header>
+
+
+<main className="px-6">
+  {/* wrapper that fills the viewport minus header and centers content */}
+  <div className="mx-auto max-w-5xl min-h-[calc(100vh-80px)] py-8
+                  flex justify-center items-start md:items-center">
+    <div className="w-full">
+      {!hasAnalyzed ? (
+        // centered input card
+        <div className="bg-white/90 border border-slate-200 rounded-2xl shadow-lg
+                        p-6 sm:p-8 min-h-[60vh]">
+          <InputPanel
+            mode={mode}
+            setMode={setMode}
+            file={file}
+            setFile={setFile}
+            textInput={textInput}
+            setTextInput={setTextInput}
+            isLoading={isLoading}
+            handleUpload={handleUpload}
+            hasAnalyzed={hasAnalyzed}
+            handleReset={handleReset}
+            randomQuote={randomQuote}
+            compact={false}
+            showQuote
+          />
         </div>
-
-        {/* Report Content */}
-        {hasAnalyzed && reportData && (
-          <div ref={reportRef} className="w-full space-y-4 px-3 py-2 pb-3">
-             <div className="animate-fade-in-up">
-              <InsightCards reportData={reportData} />
-             </div>
-
-            <div className="animate-fade-in-up">
-            <UserDelightSection />
-            </div>
-            
+      ) : (
+        // centered results card
+        <section>
+          <div
+            ref={reportRef}
+            className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8
+                       space-y-6 min-h-[60vh]"
+          >
+            <InsightCards
+              reportData={reportData}
+              isLoading={isLoading}
+              isEmpty={!file && !textInput.trim() && !hasAnalyzed}
+              onlyTop
+            />
+            {reportData ? (
+              <ResultsPreview reportData={reportData} onOpen={openResults}  />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-6 text-sm text-slate-600">
+                Add text or upload a PDF above and click <strong>Analyze</strong> to see insights here.
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </section>
+      )}
+    </div>
+  </div>
+</main>
+
+
+      <ResultsModal
+        open={showResults}
+        onClose={() => setShowResults(false)}
+        reportData={reportData || {}}
+        isLoading={isLoading}
+        onBackToInput= { ()=>{
+          setShowResults(false);
+          setHasAnalyzed(false);
+        }}
+        onStartOver={()=>{
+          setShowResults(true);
+          handleReset();
+        }}
+      />
     </div>
   );
 }
