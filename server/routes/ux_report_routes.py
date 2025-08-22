@@ -15,7 +15,7 @@ def ready():
     # Optionally check that the active model is loaded
     return "ready", 200
 
-@ux_bp.route("/api/ux/analyze", methods=["POST"])
+@ux_bp.route("/api/ux/analyze", methods=["POST", "OPTIONS"], strict_slashes=False)
 def analyze():
     """
     Accepts:
@@ -24,6 +24,9 @@ def analyze():
     Returns JSON:
       { top_insight, pie_data, insights, positive_highlights }
     """
+    if request.method == "OPTIONS":
+      return "", 200
+    
     # Uploaded file path
     if "file" in request.files:
         uploaded: FileStorage = request.files["file"]

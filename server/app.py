@@ -15,7 +15,7 @@ from events.board_events import register_socket_events
 
 
 app = Flask(__name__)
-CORS(app, origins="*", supports_credentials=True)
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 socketio = SocketIO(
     app,

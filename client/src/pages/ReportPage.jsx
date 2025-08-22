@@ -46,10 +46,10 @@ function ReportPage() {
       if (mode === 'upload') form.append('file', file);
       else form.append('text', textInput);
 
-      const API_BASE =
+      const API_BASE = process.env.REACT_APP_API_URL || (
         window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
           ? 'http://localhost:5050'
-          : `${window.location.protocol}//${window.location.host}`;
+          : '');
 
       const res = await fetch(`${API_BASE}/api/ux/analyze`, { method: 'POST', body: form });
       if (!res.ok) throw new Error((await res.text()) || 'Request failed');
@@ -66,6 +66,7 @@ function ReportPage() {
       setShowResults(true);
     } catch (err) {
       console.error(err);
+      console.error('Analyze request failed:', err);
       alert(`Analysis failed. ${err.message || 'Check console for details.'}`);
       setHasAnalyzed(false);
     } finally {
