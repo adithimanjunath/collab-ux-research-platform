@@ -5,34 +5,24 @@ services:
     build: ./server
     ports:
       - "5050:5050"
-    volumes:
-      - ./server:/app
     environment:
       - FLASK_ENV=development
-      - MONGO_URI=mongodb://mongodb:27017/
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - mongodb
+      - MONGO_URI=mongodb+srv://adithi:Shrouthy1999@cluster0.7frkuxc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+      - UX_MODEL=hf 
+      - HF_HOME=/opt/hf-cache
+      - TRANSFORMERS_CACHE=/opt/hf-cache
+    volumes:
+      - hf_cache:/opt/hf-cache
+      - ./server:/app  
 
   frontend:
     build:
-      context: ./client
-    ports:
-      - "3000:3000"
+      context:  ./client
+    ports: ["3000:3000"]
     stdin_open: true
     tty: true
-    volumes:
-      - ./client:/app
-    depends_on:
-      - backend
-
-  mongodb:
-    image: mongo
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodbdata:/data/db
+    command: ["npm", "start"]
+    depends_on: [backend]
 
 volumes:
-  mongodbdata:
+    hf_cache:
