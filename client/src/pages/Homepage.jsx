@@ -2,6 +2,7 @@ import React, {useState, useEffect} from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, provider,signInWithPopup, signOut } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { Button, Typography, Paper,Box, Avatar,} from "@mui/material";
 
 function HomePage() {
   const navigate = useNavigate();
@@ -61,35 +62,94 @@ function HomePage() {
 
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen space-y-6 bg-gray-100">
+    <Box
+      display="flex"
+      flexDirection="column"
+      alignItems="center"
+      justifyContent="center"
+      minHeight="100vh"
+      bgcolor="background.default"
+      px={2}
+    >
       {!user ? (
-        <>
-        <h1 className="text-3xl font-bold mb-4">Welcome to Collaborative UX Research Platform</h1>
-        <button onClick={handleLogin} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          Sign in with Google </button>
-        </>
+        <Paper elevation={3} sx={{ p: 5, borderRadius: 3, textAlign: "center" }}>
+          <Typography variant="h4" fontWeight={700} gutterBottom>
+            Welcome to Collaborative UX Research Platform
+          </Typography>
+          {/* Login = High-emphasis → Filled */}
+          <Button
+            variant="contained"
+            color="primary"
+            size="medium"
+            onClick={handleLogin}
+          >
+            Sign in with Google
+          </Button>
+        </Paper>
       ) : (
         <>
-        <div className ="flex flex-col items-center space-y-2">
-          <img src ={user.photoURL} alt={user.name} onError={(e) => { e.target.style.display = 'none'; }} className="w-24 h-24 rounded-full mb-2" />
-          <p className="text-lg font-semibold">{user.name}</p>
-          <p className="text-sm text-gray-600">{user.email}</p>
-          <button onClick={handleLogout} className="mt-4 px-6 py-2 bg-red-400 text-white rounded-lg hover:bg-red-600">
-            Logout
-          </button>
-        </div>
-        <h1 className="text-2xl font-bold mb-4">Select an option</h1>
-        <div className="flex space-x-8 mt-4">
-          <button onClick={() => goTo("/collab")} className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700">
-            Create Board
-          </button>
-          <button onClick={() => goTo("/report")} className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
-            Report Generator
-          </button>
-        </div>
+          <Paper
+            elevation={3}
+            sx={{
+              p: 5,
+              mb: 5,
+              borderRadius: 3,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <Avatar
+              src={user.photoURL}
+              alt={user.name}
+              sx={{ width: 80, height: 80, mb: 2 }}
+            />
+            <Typography variant="h6" fontWeight={600}>
+              {user.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {user.email}
+            </Typography>
+
+            {/* Logout = Danger → Filled error */}
+            <Button
+              variant="contained"
+              color="error"
+              size="small"
+              onClick={handleLogout}
+              sx={{ mt: 3 }}
+            >
+              Logout
+            </Button>
+          </Paper>
+
+          <Typography variant="h5" fontWeight={700} gutterBottom>
+            Select an option
+          </Typography>
+          <Box display="flex" gap={3} mt={2}>
+            {/* Create Board = Tonal */}
+            <Button
+              variant="outlined"
+              color="primary"
+              size="medium"
+              onClick={() => goTo("/collab")}
+            >
+              Create Board
+            </Button>
+
+            {/* Report Generator = Outlined */}
+            <Button
+              variant="outlined"
+              color="primary"
+              size="medium"
+              onClick={() => goTo("/report")}
+            >
+              Report Generator
+            </Button>
+          </Box>
         </>
       )}
-    </div>
+    </Box>
   );
 }
 
