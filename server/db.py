@@ -1,5 +1,5 @@
 import os
-from pymongo import MongoClient, ASCENDING, errors
+from pymongo import MongoClient, ASCENDING
 # Use the value from Render's environment settings
 mongo_uri = os.environ.get("MONGO_URI")
 
@@ -10,3 +10,4 @@ if not mongo_uri:
 client = MongoClient(mongo_uri)
 db = client["ux_research"]
 notes_collection = db["notes"]
+__all__ = ['mongo']  # optional but helps avoid name issues
