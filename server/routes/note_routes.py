@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify,g
 from services.note_service import get_notes_by_board
 from db import notes_collection
 from auth.auth_decorator import authenticate_request
-from db import MongoClient
+from pymongo import MongoClient
 
 
 note_bp = Blueprint("note_bp", __name__)
@@ -38,6 +38,6 @@ def cleanup_notes_without_boardId():
 @note_bp.route("/api/logged_users", methods=["GET"])
 def get_logged_users():
     # Return list of unique users tracked in database
-    users = mongo.db.users.find({}, {"_id": 0, "uid": 1, "name": 1, "email": 1})
+    users = MongoClient.db.users.find({}, {"_id": 0, "uid": 1, "name": 1, "email": 1})
     user_list = list(users)
     return jsonify(user_list), 200
