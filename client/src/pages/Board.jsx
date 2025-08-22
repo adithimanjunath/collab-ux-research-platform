@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { fetchNotesByBoard } from "../services/noteService";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import {useTheme} from "@mui/material/styles"
 import {
   doc,
   setDoc,
@@ -14,27 +15,27 @@ import {
 } from "firebase/firestore";
 
 import Header from "../components/Header";
-import NoteInputBar from "../components/NoteInputBar";
 import TypingIndicator from "../components/TypingIndicator";
 import NotesCanvas from "../components/NoteCanvas";
-import FilterPanel from "../components/FilterPanel";
 import socket from "../services/socketService";
 
 function Board() {
   const { boardId } = useParams();
   const boardRef = useRef(null);
   const navigate = useNavigate();
+  const theme = useTheme()
 
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
   const [user, setUser] = useState(null);
-  const [setUsername] = useState("");
+  const [username,setUsername] = useState("");
+  const headerRef = useRef(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
 
   const [notes, setNotes] = useState([]);
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("note");
   const [isLoading, setIsLoading] = useState(false);
-  const [showGrid, setShowGrid] = useState(true);
   const [filter, setFilter] = useState({
     note: false,
     idea: false,
@@ -42,6 +43,11 @@ function Board() {
     research: false,
   });
 
+  useEffect(() => {
+  if (headerRef.current) {
+    setHeaderHeight(headerRef.current.offsetHeight);
+  }
+}, []);
   // ---------- Firestore Presence ----------
   const joinBoardPresence = async (boardId, user) => {
     const ref = doc(db, "boards", boardId, "onlineUsers", user.uid);
@@ -289,10 +295,6 @@ function Board() {
     navigate("/");
   };
 
-  const toggleGrid = () => {
-    setShowGrid((prev) => !prev);
-  };
-
   const filteredNotes = useMemo(() => {
     const arr = Array.isArray(notes) ? notes : [];
     const anyChecked = Object.values(filter).some(Boolean);
@@ -305,51 +307,44 @@ function Board() {
   }
 
   return (
-    <div className="relative h-screen w-screen #d1d5db">
-      <NoteInputBar
-        noteText={noteText}
-        onTextChange={handleNoteInputChange}
-        onKeyDown={(e) => e.key === "Enter" && e.ctrlKey && addNote()}
-        onAdd={addNote}
-        noteType={noteType}
-        onTypeChange={(e) => setNoteType(e.target.value)}
-      />
-
-      <FilterPanel
-        filter={filter}
-        onToggle={(type) => setFilter((prev) => ({ ...prev, [type]: !prev[type] }))}
-      />
-
+    <div className="relative h-screen w-screen" style={{ backgroundColor: theme.palette.background.default }}  >
+      <div ref= {headerRef}>
       <Header
-        onlineUsers={onlineUsers}
-        user={user}
-        onLeave={leaveBoard}
-        onToggleGrid={toggleGrid}
-      />
+  mode="board"
+  title="UX Toolkit"
+  subtitle={`Board ID: ${boardId}`}
+  onlineUsers={onlineUsers}
+  user={user}
+  onLeave={leaveBoard}
+  noteText={noteText}
+  onTextChange={handleNoteInputChange}
+  onAdd={addNote}
+  noteType={noteType}
+  onTypeChange={(e) => setNoteType(e.target.value)}
+  filter={filter}
+  onToggleFilter={(type) =>
+    setFilter((prev) => ({ ...prev, [type]: !prev[type] }))
+  }
+/>
 
-      <div className="h-full pt-[100px] flex justify-center items-center overflow-hidden">
+      </div>
+      <div className="h-full flex justify-center items-center overflow-hidden" style={{padding: `${headerHeight + 10}px`}}>
         <div
           ref={boardRef}
           className="relative w-[1400px] max-w-full h-[900px] max-h-full rounded-xl shadow-xl border border-gray-150 overflow-hidden"
           style={{
-            backgroundColor: "#f9fafb",
-            backgroundImage: showGrid
-              ? "linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)"
-              : "none",
-            backgroundSize: "45px 45px",
+            backgroundColor: theme.palette.background.paper,
           }}
         >
-          <h1 className="absolute top-3 left-1/2 transform -translate-x-1/2 text-xl font-bold text-gray-700 tracking-wide">
-            📋 Board Name: {boardId}
-          </h1>
-
           {typingUsers.length > 0 && <TypingIndicator typingUsers={typingUsers} />}
 
           {isLoading ? (
             <div className="h-full flex justify-center items-center">
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : notes.length === 0 ? (
+          ) : ( 
+          <>
+          {notes.length === 0 ? (
             <div className="h-full flex justify-center items-center text-gray-400 italic">
               <p>No notes yet — add your first one!</p>
             </div>
@@ -363,10 +358,12 @@ function Board() {
               currentUid={user?.uid}
             />
           )}
+        </>
+      )}
         </div>
       </div>
     </div>
   );
 }
 
-export default Board;
+export default React.memo(Board);
