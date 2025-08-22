@@ -36,3 +36,8 @@
     transform: rotate(360deg);
   }
 }
+@layer utilities {
+  .animate-pulse-slow {
+    animation: pulse 3s infinite;
+  }
+}
