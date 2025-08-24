@@ -42,7 +42,7 @@ PY
 
 COPY . .
 
-COPY startup.sh /app/startup.sh
+# COPY startup.sh /app/startup.sh
 RUN chmod +x /app/startup.sh
 EXPOSE 5050
 CMD ["/app/startup.sh"]
