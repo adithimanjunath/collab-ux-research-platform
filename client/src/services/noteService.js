@@ -2,23 +2,37 @@ import {getAuthHeader} from "../utils/authHeader";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5050";
 
-export const fetchNotesByBoard = async (boardId) => {
+export const fetchNotesByBoard = async (boardId, { timeoutMs = 8000 } = {}) => {
+
+  if (!boardId || typeof boardId !== 'string') {
+    throw new Error('boardId is required');
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try{
      const headers =await getAuthHeader();
-     const res = await fetch(`${API_URL}/api/notes?boardId=${boardId}`,{
-    headers,
+     const url = `${API_URL}/api/notes?boardId=${encodeURIComponent(boardId)}`;
+     const res =  await fetch(url, {
+      headers: { Accept: 'application/json', ...headers },
+      signal: controller.signal,
   });
 
   if (!res.ok){
-    const errorText = await res.text();
+    const errorText = await res.text().catch(() => '');
     console.error("Error fetching notes:", errorText);
-    throw new Error("Failed to fetch notes");
+    const msg = errorText || `HTTP ${res.status}`;
+    throw new Error(`Failed to fetch notes: ${msg}`);
   }
-  return await res.json();
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
   }
   catch (error) {
     console.error("Error in fetchNotesByBoard:", error);
     throw error;
+  }
+  finally {
+    clearTimeout(timer);
   }
  
 };
