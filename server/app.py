@@ -14,6 +14,7 @@ from routes.ux_report_routes import ux_bp
 from events.board_events import register_socket_events
 
 
+
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
