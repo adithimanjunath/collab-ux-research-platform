@@ -20,13 +20,11 @@ COPY requirements.txt .
 
 # Pin big packages to stable wheels; you already pin torch CPU wheel
 # Use BuildKit cache for pip to avoid re-downloading between builds.
-RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade pip \
  && python -m pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 \
        --index-url https://download.pytorch.org/whl/cpu \
- && python -m pip install -r requirements.txt\
-  && python -m pip install hf_transfer
-
+ && python -m pip install -r requirements.txt
 
 COPY . .
 
