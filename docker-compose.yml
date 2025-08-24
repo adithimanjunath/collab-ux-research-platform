@@ -5,15 +5,21 @@ services:
     build: ./server
     ports:
       - "5050:5050"
-    environment:
-      - FLASK_ENV=development
-      - MONGO_URI=mongodb+srv://adithi:Shrouthy1999@cluster0.7frkuxc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
-      - UX_MODEL=hf 
-      - HF_HOME=/opt/hf-cache
-      - TRANSFORMERS_CACHE=/opt/hf-cache
+    env_file:
+      - ./server/.env
     volumes:
       - hf_cache:/opt/hf-cache
-      - ./server:/app  
+    environment:
+      - FLASK_ENV=development
+      - HF_HOME=/opt/hf-cache
+      - TRANSFORMERS_CACHE=/opt/hf-cache
+      - TOKENIZERS_PARALLELISM=false     # prevent fork storms
+      - OMP_NUM_THREADS=1                # keep CPU bounded
+      - HF_HUB_ENABLE_HF_TRANSFER=1      # faster model pulls
+      - BATCH_SA=16                      # (optional) see code hint below
+      - BATCH_ZSC=4   
+    depends_on:
+      - mongodb
 
   frontend:
     build:
@@ -21,8 +27,20 @@ services:
     ports: ["3000:3000"]
     stdin_open: true
     tty: true
+    environment:
+    - REACT_APP_API_URL=http://localhost:5050
     command: ["npm", "start"]
     depends_on: [backend]
+    
+  mongodb:
+    image: mongo:6
+    container_name: mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodbdata:/data/db
 
 volumes:
+    mongodbdata:
     hf_cache:

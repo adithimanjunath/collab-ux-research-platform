@@ -30,6 +30,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route path="/report"
           element={
             <ProtectedRoute>

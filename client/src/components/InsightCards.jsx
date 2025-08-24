@@ -1,5 +1,5 @@
 import React,{useMemo, useState} from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer,Legend } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { Lightbulb} from "lucide-react";
 import ChartLegend from "./ChartLegend";
 import {

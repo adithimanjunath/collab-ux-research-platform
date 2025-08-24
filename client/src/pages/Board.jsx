@@ -24,6 +24,7 @@ function Board() {
   const boardRef = useRef(null);
   const navigate = useNavigate();
   const theme = useTheme()
+  const joinedRef = useRef(false); 
 
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
@@ -33,6 +34,12 @@ function Board() {
   const [headerHeight, setHeaderHeight] = useState(0);
 
   const [notes, setNotes] = useState([]);
+  const [waiting, setWaiting] = useState(false);
+  const [allowed, setAllowed] = useState(false);  
+  const onWaiting  = () => setWaiting(true);
+  const onGranted  = () => setWaiting(false); // first user path
+  const onApproved = () => setWaiting(false); // approved by a member
+  const onRejected = () => setWaiting(false); // optional: also clear overlay
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("note");
   const [isLoading, setIsLoading] = useState(false);
@@ -48,6 +55,7 @@ function Board() {
     setHeaderHeight(headerRef.current.offsetHeight);
   }
 }, []);
+
   // ---------- Firestore Presence ----------
   const joinBoardPresence = async (boardId, user) => {
     const ref = doc(db, "boards", boardId, "onlineUsers", user.uid);
@@ -57,6 +65,7 @@ function Board() {
       email: user.email || "",
       joinedAt: serverTimestamp(),
     });
+    console.log("presence set:", boardId, user.uid);
     window.addEventListener("beforeunload", () => {
       deleteDoc(ref);
     });
@@ -119,22 +128,17 @@ function Board() {
 
   // ---------- Firestore Presence Listeners ----------
   useEffect(() => {
-    if (boardId && user) {
+    if (boardId && user && allowed) {
       joinBoardPresence(boardId, user);
       const unsubPresence = listenOnlineUsers(boardId);
       const unsubTyping = listenTypingUsers(boardId, user);
-      return () => {
-        leaveBoardPresence(boardId, user);
-        unsubPresence();
-        unsubTyping();
-      };
+       return () => { leaveBoardPresence(boardId, user); unsubPresence(); unsubTyping(); };
     }
-  }, [boardId, user]);
+  }, [boardId, user, allowed]);
 
   // ---------- Load Notes from MongoDB on Mount/Refresh ----------
   useEffect(() => {
-    if (!boardId || !user) return;
-
+    if (!boardId || !user || !allowed) return;
     setIsLoading(true);
     fetchNotesByBoard(boardId)
       .then((data) => {
@@ -143,11 +147,58 @@ function Board() {
       })
       .catch((err) => console.error("❌ Failed to load notes:", err.message))
       .finally(() => setIsLoading(false));
-  }, [boardId, user]);
+  }, [boardId, user, allowed]);
 
   // ---------- Socket Connection ----------
   useEffect(() => {
     if (!boardId || !user) return;
+
+    const handleJoinRequest = (data) => {
+    if (data.boardId !== boardId) return;
+    const requester = data.user?.name || "user";
+    const ok = window.confirm(`${requester} wants to join board ${boardId}.  Approve?`);
+    if (ok) {
+      socket.emit("approve_user", {
+        boardId,
+        uid: data.user?.uid
+      });
+    } else {
+      socket.emit("reject_user", {
+        boardId,
+        uid: data.user?.uid
+      });
+    }
+  };
+  const handleWaiting   = () => {setWaiting(true);  setAllowed(false);};
+  const handleGranted = () => {
+    console.log("join_granted");
+    setWaiting(false);
+    setAllowed(true);
+    joinedRef.current = true;
+  };
+    const handleRejected = () => {
+    console.log("join_rejected");
+    setWaiting(false);
+    setAllowed(false);
+    // Optional: navigate away or show a message
+    alert("Your request to join the board was rejected.");
+    navigate("/");
+  };
+
+
+  
+// const handleJoinRequest = (data) => {
+//   if (data.boardId !== boardId) return;
+//   const requester = data.user?.name || "user";
+//   const ok = window.confirm(`${requester} wants to join board ${boardId}. Accept?`);
+//   if (ok) {
+//     // MUST send the sid so server can place that socket into the room
+//     socket.emit("approve_user", { boardId, sid: data.sid });
+//   } else {
+//     socket.emit("reject_user", { boardId, sid: data.sid });
+//   }
+// };
+
     const handleNewNote = (note) => {
       if (note.boardId !== boardId) return;
       setNotes((prev) => prev.some((n) => n.id === note.id) ? prev : [...prev, note]);
@@ -178,35 +229,57 @@ function Board() {
   };
 
 
-    socket.on("new_note", handleNewNote);
-    socket.on("note_edited", handleNoteEdited);
-    socket.on("note_deleted", handleNoteDeleted);
-    socket.on("note_moved", handleNoteMoved);
-    socket.on("load_existing_notes", handleLoadExisting);
+   const handleApprovedBroadcast = (payload) => {
+    setWaiting(false);
+  };
+
+  const handleApproved  = () => { setWaiting(false); setAllowed(true); joinedRef.current = true; };
+
+  socket.on("waiting_for_approval", handleWaiting);
+  socket.on("join_granted", handleGranted);
+  socket.on("join_rejected", handleRejected);
+  socket.on("join_request", (d) => { console.log("join_request", d); handleJoinRequest(d); });
+  socket.on("new_note",              handleNewNote);
+  socket.on("note_edited",           handleNoteEdited);
+  socket.on("note_deleted",          handleNoteDeleted);
+  socket.on("note_moved",            handleNoteMoved);
+  socket.on("load_existing_notes",   handleLoadExisting);
+  socket.on("join_approved_broadcast", handleApprovedBroadcast);
+
 
     (async () => {
       const token = await user.getIdToken();
       socket.auth = { token };
 
-      socket.once("connect", () => {
-        socket.emit("join_board", { boardId, token });
-        socket.emit("request_existing_notes", {boardId, token})
-      });
+      if (socket.connected) socket.disconnect();
 
-      if (socket.connected) {
-        socket.disconnect();
-      }
-      socket.connect();
-    })();
-       return () => {
-      socket.off("new_note", handleNewNote);
-      socket.off("note_edited", handleNoteEdited);
-      socket.off("note_deleted", handleNoteDeleted);
-      socket.off("note_moved", handleNoteMoved);
-      socket.off("load_existing_notes", handleLoadExisting);
-      socket.disconnect()
-    };
-  }, [boardId, user]);
+      socket.on("connect", () => {
+  socket.emit("join_board", { boardId, token });
+});
+ socket.on("connect_error", async () => {
+    // refresh token on auth failures
+    const fresh = await user.getIdToken(true);
+    socket.auth = { token: fresh };
+  });
+
+   socket.connect();
+  })();
+
+    return () => {
+    socket.off("waiting_for_approval", handleWaiting);
+    socket.off("join_granted", handleGranted);
+    socket.off("join_approved_broadcast", handleApprovedBroadcast);
+    socket.off("join_rejected", handleRejected);
+    socket.off("join_request",         handleJoinRequest);
+    socket.off("new_note",             handleNewNote);
+    socket.off("note_edited",          handleNoteEdited);
+    socket.off("note_deleted",         handleNoteDeleted);
+    socket.off("note_moved",           handleNoteMoved);
+    socket.off("load_existing_notes",  handleLoadExisting);
+
+  };
+  }, [boardId, user,navigate]);
+
 
   // ---------- Actions ----------
   const handleEditNote = (updatedNote) => {
@@ -292,6 +365,7 @@ function Board() {
 
   const leaveBoard = async () => {
     if (user) await leaveBoardPresence(boardId, user);
+     socket.emit("leave_board", { boardId });
     navigate("/");
   };
 
@@ -326,6 +400,16 @@ function Board() {
     setFilter((prev) => ({ ...prev, [type]: !prev[type] }))
   }
 />
+{waiting && !allowed && (
+  <div className="absolute inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+    <div className="rounded-lg bg-white p-6 shadow-xl text-center">
+      <h3 className="text-lg font-medium">Requesting access...</h3>
+      <p className="text-gray-600 mt-2">Waiting for an existing member to approve your request.</p>
+      <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mt-4" />
+    </div>
+  </div>
+)}
+
 
       </div>
       <div className="h-full flex justify-center items-center overflow-hidden" style={{padding: `${headerHeight + 10}px`}}>

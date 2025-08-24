@@ -19,7 +19,7 @@ function BoardEntry() {
   }
 }, [navigate]);
 
-  const handleJoin = () => {
+ const handleJoin = () => {
     if (!boardName ) return;
 
      const sanitizedBoard = sanitizeBoardName(boardName);
@@ -29,6 +29,8 @@ function BoardEntry() {
       state: { username},
     });
   };
+
+
 
   return (
     <div className="h-screen flex flex-col justify-center items-center space-y-4" style={{ backgroundColor: theme.palette.background.default }}>
@@ -55,3 +57,4 @@ function BoardEntry() {
 }
 
 export default BoardEntry;
+
