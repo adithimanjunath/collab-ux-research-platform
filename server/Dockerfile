@@ -25,8 +25,20 @@ RUN --mount=type=cache,id=s/3c4a9e73-ad9b-495e-bfd9-f68b109aa1c2-pip-cache,targe
     python -m pip install --upgrade pip \
  && python -m pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 \
        --index-url https://download.pytorch.org/whl/cpu \
- && python -m pip install -r requirements.txt
+ && python -m pip install -r requirements.txt \
+ && python -m pip install hf_transfer
 
+
+# Use a cache mount for the HF cache too (again with an id=)
+RUN --mount=type=cache,id=hf-cache,target=/opt/hf-cache \
+    python - <<'PY'
+from huggingface_hub import snapshot_download
+# Pre-download the exact models you use in startup.sh
+snapshot_download("MoritzLaurer/deberta-v3-large-zeroshot-v1", cache_dir="/opt/hf-cache", token=None)
+snapshot_download("distilbert-base-uncased-finetuned-sst-2-english", cache_dir="/opt/hf-cache", token=None)
+snapshot_download("t5-small", cache_dir="/opt/hf-cache", token=None)
+print("HF models cached into /opt/hf-cache")
+PY
 
 COPY . .
 
