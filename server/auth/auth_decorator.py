@@ -38,7 +38,11 @@ def authenticate_request(f):
             if not decoded_token:
                 print("❌ Invalid Firebase token")
                 return jsonify({"error": "Invalid token"}), 401
-            g.user = decoded_token
+            g.user = {
+                "uid": decoded_token.get("uid"),
+                "email": decoded_token.get("email"),
+                "name": decoded_token.get("name") or decoded_token.get("email"),
+            }
             return f(*args, **kwargs)
         except Exception as e:
             print("❌ Exception in authenticate_request:", e)
