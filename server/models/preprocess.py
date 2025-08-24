@@ -15,20 +15,32 @@ except Exception:  # library optional at import time
 # Configuration
 # -------------------------------------------------------------------
 
-# default pattern: lines that start with "A:" (answers in interview logs)
+# default pattern: capture multi-line A: blocks until the next Q:/A: or EOF
 DEFAULT_ANSWER_PATTERNS: Tuple[re.Pattern[str], ...] = (
-    re.compile(r"(?m)^\s*A:\s*(.+?)\s*$"),
-    # allow Q/A blocks like "Answer:" or "Ans:"
-    re.compile(r"(?m)^\s*(?:Answer|Ans)\s*:\s*(.+?)\s*$", re.IGNORECASE),
+    re.compile(r"(?ms)^A:\s*(.+?)(?=\nQ:|\Z)"),
+    re.compile(r"(?ms)^(?:Answer|Ans)\s*:\s*(.+?)(?=\nQ:|\Z)", re.IGNORECASE),
 )
+
+
 
 # minimal trimming / normalization for extracted feedback items
 def _clean(s: str) -> str:
-    s = s.strip()
-    # collapse excessive internal whitespace
-    s = re.sub(r"\s+", " ", s)
-    return s
+    if not s:
+        return ""
+    # unify line endings early
+    s = s.replace("\r\n", "\n").replace("\r", "\n")
 
+    # join hyphenated line breaks: "dash-\nboard" -> "dashboard"
+    s = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", s)
+
+    # turn remaining newlines into spaces
+    s = s.replace("\n", " ")
+
+    # collapse repeated whitespace
+    s = re.sub(r"\s+", " ", s)
+
+    # tidy quotes/spaces
+    return s.strip(" \t\"“”'’")
 
 # -------------------------------------------------------------------
 # PDF extraction
@@ -93,6 +105,13 @@ def extract_answers_from_text(text: str, patterns: Sequence[re.Pattern[str]] = D
             s = _clean(s)
             if s:
                 found.append(s)
+
+    # If there is a closing "overall" sentence without "A:", include it
+    overall_rx = re.compile(r"(?mi)^\s*(?:But\s+overall|Overall|On the positive side)\s*[:,]\s*(.+?)\s*$")
+    for m in overall_rx.finditer(text):
+        ans = _clean(m.group(1))
+        if ans:
+            found.append(ans)
 
     # minimal de-duplication preserving order
     seen = set()

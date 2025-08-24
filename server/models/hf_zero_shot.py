@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, cast, Iterable, Tuple
 import re,os
 from transformers.pipelines import pipeline
-from .base import UXModel, CATEGORIES
+from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories, PREF_RANK
 
 try:
     import torch  # why: detect GPU and avoid needless CPU-only runs
@@ -24,9 +24,26 @@ class HFZeroShotModel(UXModel):
 
      # ---- Tunable thresholds (report these in thesis) ----
     CRITIQUE_NEG_PROB = 0.60          # gate: treat as critique if neg_prob ≥ 0.60
-    ZSC_THRESHOLD = 0.50              # assign category if zero-shot score ≥ 0.50
+    ZSC_THRESHOLD = 0.60        
+    TOP_K=3                      # assign category if zero-shot score ≥ 0.50
     DELIGHT_TOP1_THRESHOLD = 0.50     # keep delight top-1 only if score ≥ 0.50
     DELIGHT_MAX_ITEMS = int(os.getenv("DELIGHT_MAX_ITEMS", "1000")) 
+
+        # ---- Batch sizes (configurable via environment) ----
+    BATCH_SA = int(os.getenv("BATCH_SA", "32"))   # Sentiment Analysis
+    BATCH_ZSC = int(os.getenv("BATCH_ZSC", "8"))  # Zero-Shot Classification
+    ZSC_HYPOTHESIS = os.getenv("ZSC_HYPOTHESIS", "This text is about {}.")
+
+    @staticmethod
+    def _dedupe_keep_order(seq: list[str]) -> list[str]:
+        seen = set()
+        out = []
+        for s in seq:
+            key = s.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(s)
+        return out
 
     # ---- Negation-aware patterns ----
     _SAFE_NEGATED_PROBLEMS_RE = re.compile(
@@ -63,7 +80,7 @@ class HFZeroShotModel(UXModel):
     @classmethod
     def _get_pipes(cls):
         if cls._classifier is None:
-            cls._classifier = pipeline("zero-shot-classification", model="valhalla/distilbart-mnli-12-3", device = _pick_device(), truncation= True,)
+            cls._classifier = pipeline("zero-shot-classification", model="MoritzLaurer/deberta-v3-large-zeroshot-v1", device = _pick_device(), truncation= True,)
         if cls._sentiment is None:
             cls._sentiment = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english", device = _pick_device(), truncation= True,)
         if cls._summarizer is None:
@@ -107,6 +124,29 @@ class HFZeroShotModel(UXModel):
         if lower.startswith(("although", "though")) and "," in feedback:
             return feedback.split(",", 1)[1].strip().lstrip(".,:;! ")
         return feedback.strip()
+    @staticmethod
+    def _extract_praise_clause(text: str) -> str:
+        """
+        For mixed praise/critique sentences, keep a clean praise clause.
+        Strategy:
+        1) Pick the last sentence containing a positive keyword.
+        2) Otherwise, keep the part after 'but'/'however' (often the praise).
+        3) Fallback to original text stripped.
+        """
+        pos_rx = re.compile(r"\b(love|liked|like|great|clean|fast|intuitive|modern|easy|nice|beautiful|excellent|awesome)\b", re.I)
+        # sentence-first pass (pick last positive sentence)
+        sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+        for s in reversed(sentences):
+            if pos_rx.search(s):
+                return s.strip()
+
+        lower = text.lower()
+        for delim in (" but ", " however "):
+            idx = lower.find(delim)
+            if idx != -1:
+                return text[idx + len(delim):].strip().lstrip(".,:;! ")
+
+        return text.strip()
 
     @staticmethod
     def _batch(iterable: List[str], size: int) -> Iterable[Tuple[int, List[str]]]:
@@ -131,19 +171,24 @@ class HFZeroShotModel(UXModel):
 
         # --- 1) Batch sentiment pass
         # HF pipelines support list input + batch_size
+        
         sa_results: List[Dict[str, Any]] = []
-        for _, chunk in self._batch(items, size=32):
-            sa = cast(List[Dict[str, Any]], sentiment_analyzer(chunk, batch_size=32, truncation=True))
+        for _, chunk in self._batch(items, size=self.BATCH_SA):
+            sa = cast(List[Dict[str, Any]], sentiment_analyzer(chunk, batch_size=self.BATCH_SA, truncation=True))
             sa_results.extend(sa)
 
         is_critique_mask: List[bool] = []
         for text, sa in zip(items, sa_results):
+            suggestive = self._has_suggestion_keyword(text)
             label = str(sa.get("label", "")).upper()
             score = float(sa.get("score", 0.0))
             pos_prob = score if label == "POSITIVE" else (1.0 - score)
             neg_prob = 1.0 - pos_prob
-            suggestive = self._has_suggestion_keyword(text)
-            is_critique_mask.append((neg_prob >= self.CRITIQUE_NEG_PROB) or suggestive)
+
+            if suggestive:
+                is_critique_mask.append(True)
+            else:
+                is_critique_mask.append(neg_prob >= self.CRITIQUE_NEG_PROB)
 
         # --- 2) Build critique set (with clause focusing)
         critiques: List[str] = []
@@ -159,32 +204,71 @@ class HFZeroShotModel(UXModel):
 
         if critiques:
             zsc_outputs: List[Dict[str, Any]] = []
-            for _, chunk in self._batch(critiques, size=8):
+            for _, chunk in self._batch(critiques, size=self.BATCH_ZSC):
                 out = cast(
                     List[Dict[str, Any]],
                     classifier(
                         chunk,
                         candidate_labels=CATEGORIES,
                         multi_label=True,
-                        batch_size=8,
+                        batch_size=self.BATCH_ZSC,
                         truncation=True,
+                        hypothesis_template=self.ZSC_HYPOTHESIS,
                     ),
                 )
                 zsc_outputs.extend(out)
+                assigned_texts = set()
+
 
             for crit_text, z in zip(critiques, zsc_outputs):
                 labels = z.get("labels", []) or []
                 scores = [float(s) for s in (z.get("scores", []) or [])]
-                for lab, sc in zip(labels, scores):
-                    if lab in category_counts and sc >= self.ZSC_THRESHOLD:
-                        category_counts[lab] += 1
-                        category_feedbacks[lab].append(crit_text)
+
+                sorted_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+                kept = [(labels[i], scores[i]) for i in sorted_idx[:self.TOP_K] if scores[i] >= self.ZSC_THRESHOLD]
+
+                kept = [(lab, sc) for (lab, sc) in kept if passes_category_gate(lab, crit_text)]
+            
+                # prefer specific UX themes over generic "Feedback"
+                if any(lab in ["Usability","Navigation","Performance","Responsiveness","Visual Design"] for lab, _ in kept):
+                    kept = [(lab, sc) for lab, sc in kept if lab != "Feedback"]
+
+                # (optional) Performance/Responsiveness guard for “slow”
+                if any(lab == "Performance" for lab, _ in kept):
+                    if not re.search(r"\b(slow|lag|latency|freeze\w*|hang\w*|loading|waiting\s*time|delay(ed)?|takes?\s+too\s+long|sluggish|spinner|spinning)\b", crit_text, re.I):
+                        kept = [(lab, sc) for lab, sc in kept if lab != "Performance"]
+                
+                lower = crit_text.lower()
+                if not kept:   # only if model didn’t give us anything above threshold
+    # Usability heuristics
+                    if any(word in lower for word in ["confusing", "not intuitive", "hard to find"]):
+                        kept.append(("Usability", 0.51))   # assign minimal score
+
+    # Navigation heuristics
+                if ("navigation" in lower or "find the settings" in lower or re.search(r"\b(could(?:n['’]t| not)|can(?:n['’]t| not))\s+find.*\bsubmit\s+button\b", lower)):
+                    kept.append(("Navigation", 0.51))
+
+    # NEW: Responsiveness heuristics (unresponsive, layout breaks/overlap, mobile issues)
+                if (re.search(r"\bunresponsive\b", lower) or
+                    re.search(r"\blayout\s*(?:breaks?|broken)\b", lower) or
+                    re.search(r"\boverlap\w*\b", lower) or
+                    re.search(r"\b(responsive|breakpoint|mobile|tablet|phone|screen\s*size|resize|viewport)\b", lower)):
+                    kept.append(("Responsiveness", 0.51))
+
+
+                for lab, sc in kept:
+                    if lab in category_counts:
+                        if crit_text not in category_feedbacks[lab]:  
+                            category_counts[lab] += 1
+                            category_feedbacks[lab].append(crit_text)
 
         # --- 4) Delight: top-1 label on positives (batched, optional cap)
         positives: List[str] = [t for t, is_crit in zip(items, is_critique_mask) if not is_crit]
-        positive_comments = positives[: self.DELIGHT_MAX_ITEMS]  # cap to protect worst-case N
-        delight_counts: Dict[str, int] = {cat: 0 for cat in CATEGORIES}
+        praise_only: List[str] = [self._extract_praise_clause(t) for t in positives]
+        positive_highlights = praise_only[:6]
+        positive_comments = praise_only[: self.DELIGHT_MAX_ITEMS]# cap to protect worst-case 
 
+        delight_counts: Dict[str, int] = {cat: 0 for cat in CATEGORIES}
         if positive_comments:
             zsc_pos_outputs: List[Dict[str, Any]] = []
             for _, chunk in self._batch(positive_comments, size=8):
@@ -196,6 +280,7 @@ class HFZeroShotModel(UXModel):
                         multi_label=False,
                         batch_size=8,
                         truncation=True,
+                        hypothesis_template=self.ZSC_HYPOTHESIS,
                     ),
                 )
                 zsc_pos_outputs.extend(out)
@@ -209,6 +294,7 @@ class HFZeroShotModel(UXModel):
         delight_distribution = [{"name": cat, "value": int(delight_counts[cat])} for cat in CATEGORIES]
 
         # --- 5) Summaries for categories with issues (unchanged logic)
+                # --- 5) Summaries for categories with issues (unchanged logic)
         category_summaries: Dict[str, str] = {}
         for cat, texts in category_feedbacks.items():
             if not texts:
@@ -224,22 +310,50 @@ class HFZeroShotModel(UXModel):
             except Exception:
                 category_summaries[cat] = "; ".join(texts[:6])
 
-        pie_data = [{"name": cat, "value": count} for cat, count in category_counts.items() if count > 0]
-        insights = {
-            cat: (category_feedbacks[cat][:6] or [category_summaries.get(cat, "No significant issues mentioned.")])
-            for cat in CATEGORIES
-            if category_counts.get(cat, 0) > 0
-        }
+        # --- 6) De‑dupe feedbacks per category and compute counts
+        for cat in CATEGORIES:
+            seen: set[str] = set()
+            deduped: List[str] = []
+            for s in category_feedbacks.get(cat, []):
+                key = s.strip().lower()
+                if key and key not in seen:
+                    seen.add(key)
+                    deduped.append(s)
+                if len(deduped) >= 6:  # keep UI cap
+                    break
+            category_feedbacks[cat] = deduped
+
+        # counts used by both insights and pie
+        category_counts: Dict[str, int] = {cat: len(category_feedbacks.get(cat, [])) for cat in CATEGORIES}
+
+        # --- 7) Build insights (with summary fallback), ordered
+        insights: Dict[str, List[str]] = {}
+        for cat in CATEGORIES:
+            if category_counts.get(cat, 0) > 0:
+                insights[cat] = category_feedbacks[cat] or [category_summaries.get(cat, "No significant issues mentioned.")]
+        if insights:
+            ordered_keys = sort_categories(list(insights.keys()))
+            insights = {k: insights[k] for k in ordered_keys}
+
+        # --- 8) Pie data from counts (keeps pie in sync with card counts)
+        nonzero = [c for c in CATEGORIES if category_counts[c] > 0]
+        pie_order = sort_categories(nonzero)
+        pie_data = [{"name": c, "value": category_counts[c]} for c in pie_order]
+
+        # --- 9) Top insight
         top_insight = (
             max(category_summaries.items(), key=lambda kv: len(kv[1]))[1]
             if category_summaries
             else (positives[0] if positives else "No strong themes detected.")
         )
 
+        # --- 10) Respect DELIGHT_MAX_ITEMS for positives (already enforced above)
+        positive_highlights = positive_comments[:6]
+
         return {
             "top_insight": top_insight,
             "pie_data": pie_data,
             "insights": insights,
-            "positive_highlights": positives[:6],
+            "positive_highlights": positive_highlights,
             "delight_distribution": delight_distribution,
         }
