@@ -1,7 +1,6 @@
 from typing import List, Dict, Any, cast, Iterable, Tuple
 import re,os
-from transformers.pipelines import pipeline
-from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories, PREF_RANK
+from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories
 
 try:
     import torch  # why: detect GPU and avoid needless CPU-only runs
@@ -11,10 +10,12 @@ except Exception:
 
 def _pick_device() -> int:
     # why: pick GPU when available for large batches
-    if _HAS_TORCH and torch.cuda.is_available():
+    if _HAS_TORCH and hasattr(torch, "cuda") and torch.cuda.is_available():
         return 0
     return -1
-
+HF_ZSC_MODEL = os.getenv("HF_ZSC_MODEL", "MoritzLaurer/deberta-v3-large-zeroshot-v2.0-c")
+HF_SA_MODEL  = os.getenv("HF_SA_MODEL",  "distilbert-base-uncased-finetuned-sst-2-english")
+HF_SUM_MODEL = os.getenv("HF_SUM_MODEL", "t5-small")
 USE_HF_SERVERLESS = os.getenv("USE_HF_SERVERLESS", "1") not in {"0", "false", "False"}
 
 # ---- Small adapters that mimic transformers pipelines but call HF API ----
@@ -27,6 +28,7 @@ class _RemoteZeroShotPipeline:
                 s, candidate_labels,
                 multi_label=multi_label,
                 hypothesis_template=hypothesis_template,
+                model=HF_ZSC_MODEL,
             )
             return {
                 "labels": out.get("labels", []) or [],
@@ -40,7 +42,7 @@ class _RemoteSentimentPipeline:
     def __call__(self, sequences, batch_size=None, truncation=True):
         from services.hf_client import sa_single
         def one(s: str):
-            out = sa_single(s)
+            out = sa_single(s, model=HF_SA_MODEL)
             return {"label": out.get("label", ""), "score": float(out.get("score", 0.0))}
         if isinstance(sequences, (list, tuple)):
             return [one(s) for s in sequences]
@@ -49,7 +51,7 @@ class _RemoteSentimentPipeline:
 class _RemoteSummarizerPipeline:
     def __call__(self, text, max_length=60, min_length=20, do_sample=False):
         from services.hf_client import sum_single
-        return sum_single(text, max_length=max_length, min_length=min_length, do_sample=do_sample)
+        return sum_single(text, max_length=max_length, min_length=min_length,do_sample=do_sample, model=HF_SUM_MODEL)
 
 
 class HFZeroShotModel(UXModel):
@@ -59,10 +61,10 @@ class HFZeroShotModel(UXModel):
     _summarizer = None
 
      # ---- Tunable thresholds (report these in thesis) ----
-    CRITIQUE_NEG_PROB = 0.60          # gate: treat as critique if neg_prob ≥ 0.60
+    CRITIQUE_NEG_PROB = 0.60          
     ZSC_THRESHOLD = 0.60        
-    TOP_K=3                      # assign category if zero-shot score ≥ 0.50
-    DELIGHT_TOP1_THRESHOLD = 0.50     # keep delight top-1 only if score ≥ 0.50
+    TOP_K=3                      
+    DELIGHT_TOP1_THRESHOLD = 0.50     
     DELIGHT_MAX_ITEMS = int(os.getenv("DELIGHT_MAX_ITEMS", "1000")) 
 
         # ---- Batch sizes (configurable via environment) ----
@@ -70,17 +72,35 @@ class HFZeroShotModel(UXModel):
     BATCH_ZSC = int(os.getenv("BATCH_ZSC", "8"))  # Zero-Shot Classification
     ZSC_HYPOTHESIS = os.getenv("ZSC_HYPOTHESIS", "This text is about {}.")
 
-    @staticmethod
-    def _dedupe_keep_order(seq: list[str]) -> list[str]:
-        seen = set()
-        out = []
-        for s in seq:
-            key = s.strip().lower()
-            if key and key not in seen:
-                seen.add(key)
-                out.append(s)
-        return out
+    @classmethod
+    def _get_pipes(cls):
+               # Prefer remote (HF serverless)
+        if USE_HF_SERVERLESS:
+            if cls._classifier is None:
+                cls._classifier = _RemoteZeroShotPipeline()
+            if cls._sentiment is None:
+                cls._sentiment = _RemoteSentimentPipeline()
+            if cls._summarizer is None:
+                cls._summarizer = _RemoteSummarizerPipeline()
+            return cls._classifier, cls._sentiment, cls._summarizer
 
+                # Fallback: lazy import transformers only if needed
+        from transformers.pipelines import pipeline  # <- lazy import here
+        if cls._classifier is None:
+            cls._classifier = pipeline(
+                "zero-shot-classification", model=HF_ZSC_MODEL,
+                device=_pick_device(), truncation=True
+            )
+        if cls._sentiment is None:
+            cls._sentiment = pipeline(
+                "sentiment-analysis", model=HF_SA_MODEL,
+                device=_pick_device(), truncation=True
+            )
+        if cls._summarizer is None:
+            cls._summarizer = pipeline(
+                "summarization", model=HF_SUM_MODEL, device=_pick_device()
+            )
+        return cls._classifier, cls._sentiment, cls._summarizer
     # ---- Negation-aware patterns ----
     _SAFE_NEGATED_PROBLEMS_RE = re.compile(
         r'\b(?:no|without)\s+(?:major\s+)?(?:issues?|problems?|bugs?|errors?)\b',
@@ -112,41 +132,17 @@ class HFZeroShotModel(UXModel):
         r'\b(?:no|not|without|never|hardly any|rarely any|no major|no significant)\b',
         re.IGNORECASE,
     )
+    @staticmethod
+    def _dedupe_keep_order(seq: list[str]) -> list[str]:
+        seen = set()
+        out = []
+        for s in seq:
+            key = s.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(s)
+        return out
 
-    @classmethod
-    def _get_pipes(cls):
-            # Prefer remote (HF serverless) if enabled
-        if USE_HF_SERVERLESS:
-            if cls._classifier is None:
-                cls._classifier = _RemoteZeroShotPipeline()
-            if cls._sentiment is None:
-                cls._sentiment = _RemoteSentimentPipeline()
-            if cls._summarizer is None:
-                cls._summarizer = _RemoteSummarizerPipeline()
-            return cls._classifier, cls._sentiment, cls._summarizer
-                # ---- Fallback: local transformers (original behavior) ----
-        if cls._classifier is None:
-            cls._classifier = pipeline(
-                "zero-shot-classification",
-                model="MoritzLaurer/deberta-v3-large-zeroshot-v1",
-                device=_pick_device(),
-                truncation=True,
-            )
-        if cls._sentiment is None:
-            cls._sentiment = pipeline(
-                "sentiment-analysis",
-                model="distilbert-base-uncased-finetuned-sst-2-english",
-                device=_pick_device(),
-                truncation=True,
-            )
-        if cls._summarizer is None:
-            cls._summarizer = pipeline(
-                "summarization",
-                model="t5-small",
-                device=_pick_device(),
-            )
-        return cls._classifier, cls._sentiment, cls._summarizer
-    
     @staticmethod
     def _has_suggestion_keyword(text: str) -> bool:
         """Return True if text implies a critique/suggestion (negation-aware)."""
@@ -267,7 +263,6 @@ class HFZeroShotModel(UXModel):
             for crit_text, z in zip(critiques, zsc_outputs):
                 labels = z.get("labels", []) or []
                 scores = [float(s) for s in (z.get("scores", []) or [])]
-
                 sorted_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
                 kept = [(labels[i], scores[i]) for i in sorted_idx[:self.TOP_K] if scores[i] >= self.ZSC_THRESHOLD]
                 kept = [(lab, sc) for (lab, sc) in kept if passes_category_gate(lab, crit_text)]
@@ -282,23 +277,23 @@ class HFZeroShotModel(UXModel):
                         kept = [(lab, sc) for lab, sc in kept if lab != "Performance"]
                 
                 lower = crit_text.lower()
-                if not kept:   # only if model didn’t give us anything above threshold
+                if not kept:   
                     # Usability heuristics
                     if any(word in lower for word in ["confusing", "not intuitive", "hard to find"]):
                         kept.append(("Usability", 0.51))   # assign minimal score
 
                     # Navigation heuristics
-                if ("navigation" in lower or "find the settings" in lower or re.search(r"\b(could(?:n['’]t| not)|can(?:n['’]t| not))\s+find.*\bsubmit\s+button\b", lower)):
-                    kept.append(("Navigation", 0.51))
+                    if ("navigation" in lower or "find the settings" in lower or re.search(r"\b(could(?:n['’]t| not)|can(?:n['’]t| not))\s+find.*\bsubmit\s+button\b", lower)):
+                        kept.append(("Navigation", 0.51))
 
                 # NEW: Responsiveness heuristics (unresponsive, layout breaks/overlap, mobile issues)
-                if (re.search(r"\bunresponsive\b", lower) or
-                    re.search(r"\blayout\s*(?:breaks?|broken)\b", lower) or
-                    re.search(r"\boverlap\w*\b", lower) or
-                    re.search(r"\b(responsive|breakpoint|mobile|tablet|phone|screen\s*size|resize|viewport)\b", lower)):
-                    kept.append(("Responsiveness", 0.51))
+                    if (re.search(r"\bunresponsive\b", lower) or
+                        re.search(r"\blayout\s*(?:breaks?|broken)\b", lower) or
+                        re.search(r"\boverlap\w*\b", lower) or
+                        re.search(r"\b(responsive|breakpoint|mobile|tablet|phone|screen\s*size|resize|viewport)\b", lower)):
+                        kept.append(("Responsiveness", 0.51))
 
-                for lab, sc in kept:
+                for lab, in kept:
                     if lab in category_counts:
                         if crit_text not in category_feedbacks[lab]:  
                             category_counts[lab] += 1
@@ -307,8 +302,9 @@ class HFZeroShotModel(UXModel):
         # --- 4) Delight: top-1 label on positives (batched, optional cap)
         positives: List[str] = [t for t, is_crit in zip(items, is_critique_mask) if not is_crit]
         praise_only: List[str] = [self._extract_praise_clause(t) for t in positives]
-        positive_highlights = praise_only[:6]
         positive_comments = praise_only[: self.DELIGHT_MAX_ITEMS]# cap to protect worst-case 
+        positive_highlights = praise_only[:6]
+        
 
         delight_counts: Dict[str, int] = {cat: 0 for cat in CATEGORIES}
         if positive_comments:
@@ -336,7 +332,6 @@ class HFZeroShotModel(UXModel):
         delight_distribution = [{"name": cat, "value": int(delight_counts[cat])} for cat in CATEGORIES]
 
         # --- 5) Summaries for categories with issues (unchanged logic)
-                # --- 5) Summaries for categories with issues (unchanged logic)
         category_summaries: Dict[str, str] = {}
         for cat, texts in category_feedbacks.items():
             if not texts:
