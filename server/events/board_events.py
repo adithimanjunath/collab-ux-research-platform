@@ -1,61 +1,26 @@
 from flask import request
-from collections import defaultdict
-from flask_socketio import rooms
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from firebase_admin import auth as fb_auth
-from services.note_service import create_note, update_note, delete_note
+from services.note_service import create_note, update_note, delete_note, get_notes_by_board
 from auth.firebase_verify import verify_firebase_token
-
-socketio = SocketIO(cors_allowed_origins="*")
 
 # Optional: socket presence (can be removed if only Firestore presence is used)
 online_users = {}
-pending_requests = defaultdict(dict) 
-approved = defaultdict(set) 
 sid_to_uid = {}
 latest_sid_by_uid = {}              # { uid: sid }
-pending_by_uid     = {}             # { board_id: { uid: {name,email} } }
-pending_sid_by_uid = {}             # { board_id: { uid: sid } }
 
 def _broadcast_user_list(board_id):
     users = online_users.get(board_id, {})
-    emit(
-        "user_list",
-        {
-            "boardId": board_id,
-            "users": [
-                {"uid": uid, "name": u["name"], "email": u["email"]}
-                for uid, u in users.items()
-            ],
-        },
-        room=board_id
-    )
+    payload = {
+        "boardId": board_id,
+        "users": [
+            {"uid": uid, "name": u["name"], "email": u["email"]}
+            for uid, u in users.items()
+        ],
+    }
+    emit("user_list", payload, room=board_id)
+    emit("online_users", payload["users"], room=board_id)
 
-def _room_sids(socketio, board_id, namespace="/"):
-    """Return a set of sids currently in the Socket.IO room (server truth)."""
-    mgr = socketio.server.manager
-    try:
-        # python-socketio >= 5
-        return set(mgr.rooms.get(namespace, {}).get(board_id, set()))
-    except Exception:
-        try:
-            # fallback API
-            return set(mgr.get_participants(namespace, board_id))
-        except Exception:
-            return set()
-pass
-
-def _occupied_by_other(socketio, board_id, uid):
-    """True if the room has at least one sid owned by a different uid."""
-    sids = _room_sids(socketio, board_id)
-    if not sids:
-        return False
-    for s in sids:
-        owner = sid_to_uid.get(s)
-        if owner and owner != uid:
-            return True
-    # If room has sids but we don't know their uid yet, treat as occupied (safer)
-    return any(s for s in sids if s not in sid_to_uid)
 
 # -------------------------
 # Join/Leave Board
@@ -65,41 +30,25 @@ def register_socket_events(socketio):
     def join_board(data):
         token = data.get("token")
         board_id = data.get("boardId")
-        decoded = fb_auth.verify_id_token(token)
+        if not board_id:
+            emit("join_denied", {"reason": "Missing boardId"})
+            return
+        try:
+            decoded = fb_auth.verify_id_token(token)
+        except Exception:
+            decoded = None
         if not decoded:
             emit("join_denied", {"reason": "Invalid or missing token"})
             return
+
+        # Count users who were already on this board before we add the new joiner
+        pre_count = len(online_users.get(board_id, {}))
 
         uid   = decoded["uid"]
         name  = decoded.get("name") or decoded.get("displayName") or "User"
         email = decoded.get("email") or ""
         sid   = request.sid
         latest_sid_by_uid[uid] = sid
-
-        is_occupied_by_others = _occupied_by_other(socketio, board_id, uid)
-
-        if is_occupied_by_others:
-            # Approval is needed
-            pend_uid = pending_by_uid.setdefault(board_id, {})
-            pend_sid = pending_sid_by_uid.setdefault(board_id, {})
-            pend_uid[uid] = {"uid": uid, "name": name, "email": email}
-            pend_sid[uid] = sid
-
-            emit("waiting_for_approval", {"boardId": board_id}, room=sid)
-
-            payload = {
-            "boardId": board_id,
-            "sid": sid,
-            "user": {"uid": uid, "name": name, "email": email},
-        }
-            emit("join_request", payload, room=board_id)
-            
-            for occ_uid, occ_info in online_users.get(board_id, {}).items():
-                for s in list(occ_info.get("sockets", set())):
-                    emit("join_request", payload, room=s)
-
-            print(f"🛎 Approval needed: {name} ({uid}) requests board {board_id}, sid={sid}")
-            return
 
         join_room(board_id)
         sid_to_uid[sid] = uid
@@ -110,114 +59,78 @@ def register_socket_events(socketio):
 
         print(f"✅ Auto join: {name} ({uid}) AUTO joined room {board_id} ")
         emit("join_granted", {"boardId": board_id}, room=sid)
-    
-# @socketio.on("request_join") 
-# def handle_request_join(data):
-#     board_id = data.get("boardId")
-#     user = data.get("user")
-#     sid = request.sid
+        # Send full note snapshot to the newly joined client so everyone sees the same board
+        try:
+            notes = get_notes_by_board(board_id)
+        except Exception:
+            notes = []
+        emit("load_existing_notes", {"boardId": board_id, "notes": notes}, room=sid)
 
-#     # Remember who’s waiting (so we can approve by sid)
-#     pend = pending_requests.setdefault(board_id, {})
-#     pend[sid] = user
+        # Demo-only: if there are already users on this board, ask the new joiner to show a brief waiting overlay
+        if pre_count > 0:
+            print(f"🕒 demo_wait -> only SID {sid} (others online: {pre_count})")
+            emit("demo_wait", {"ms": 3500}, room=sid)
 
-#     print(f"🛎 request_join from {user.get('name')} for {board_id}, sid={sid}")
+        emit("user_joined", {"uid": uid, "name": name, "email": email}, room=board_id, include_self=False)
+        _broadcast_user_list(board_id)
 
-#     # Tell requester they are waiting
-#     emit("waiting_for_approval", {"boardId": board_id})
-
-#     # Notify everyone already inside the board room
-#     emit("join_request", {"boardId": board_id, "sid": sid, "user": user}, room=board_id)
-
-@socketio.on("approve_user")
-def approve_user(data):
-    board_id = data.get("boardId")
-    uid_to_approve = data.get("uid")
-
-    pend_uid_map = pending_by_uid.get(board_id, {})
-    pend_sid_map = pending_sid_by_uid.get(board_id, {})
-
-    user_info = pend_uid_map.pop(uid_to_approve, None)
-    target_sid = pend_sid_map.pop(uid_to_approve, None)
-    if not user_info or not target_sid:
-        print(f"⚠️ Approval failed: could not find pending user {uid_to_approve}")
-        return
-
-    print(f"✅ Approving user: {user_info['name']} ({uid_to_approve})")
-        # Manually add their socket to the room
-    socketio.server.enter_room(target_sid, board_id)
-    sid_to_uid[target_sid] = uid_to_approve
-
-        # Add to our presence tracking
-    board_users = online_users.setdefault(board_id, {})
-    user_entry = board_users.setdefault(uid_to_approve, {"name": user_info["name"], "email": user_info["email"], "sockets": set()})
-    user_entry["sockets"].add(target_sid)
-
-        # 3. Tell the approved user they are in
-    emit("join_granted", {"boardId": board_id}, room=target_sid)
-        
-        # 4. (Optional but good) Tell everyone else someone new joined
-    emit("join_approved_broadcast", {"boardId": board_id, "user": user_info}, room=board_id)
+    @socketio.on("get_online_users")
+    def get_online_users(data):
+        board_id = data.get("boardId")
+        users = online_users.get(board_id, {})
+        emit("online_users", [
+            {"uid": uid, "name": u["name"], "email": u["email"]}
+            for uid, u in users.items()
+        ])
+        emit("user_list", {
+            "boardId": board_id,
+            "users": [
+                {"uid": uid, "name": u["name"], "email": u["email"]}
+                for uid, u in users.items()
+            ],
+        })
 
 
-@socketio.on("reject_user")
-def reject_user(data):
-    board_id = data.get("boardId")
-    uid_to_reject = data.get("uid")
-
-    pend_uid_map = pending_by_uid.get(board_id, {})
-    pend_sid_map = pending_sid_by_uid.get(board_id, {})
-
-    user_info = pend_uid_map.pop(uid_to_reject, None)
-    target_sid = pend_sid_map.pop(uid_to_reject, None)
-
-    if user_info and target_sid:
-        print(f"❌ Rejecting user: {user_info['name']} ({uid_to_reject})")
-        emit("join_rejected", {"boardId": board_id}, room=target_sid)
-
-@socketio.on("leave_board")
-def leave_board(data):
+    @socketio.on("leave_board")
+    def leave_board(data):
         board_id = data.get("boardId")
         sid = request.sid
         leave_room(board_id)
-        sid_to_uid.pop(sid, None)  
+        left_uid = sid_to_uid.get(sid)
+        sid_to_uid.pop(sid, None)
+
         if board_id in online_users:
             for uid in list(online_users[board_id].keys()):
                 online_users[board_id][uid]["sockets"].discard(sid)
                 if not online_users[board_id][uid]["sockets"]:
                     del online_users[board_id][uid]
+            if left_uid:
+                emit("user_left", {"uid": left_uid}, room=board_id, include_self=False)
             _broadcast_user_list(board_id)
         print(f"🚪 Socket {sid} left board {board_id}")
 
-@socketio.on("disconnect")
-def disconnect():
-    sid = request.sid
-    uid = sid_to_uid.pop(sid, None)
-    print(f"🔌 Socket {sid} disconnected")
-
-    # remove from online_users
-    for board_id in list(online_users.keys()):
-        for u in list(online_users[board_id].keys()):
-            online_users[board_id][u]["sockets"].discard(sid)
-            if not online_users[board_id][u]["sockets"]:
-                del online_users[board_id][u]
+    @socketio.on("disconnect")
+    def disconnect():
+        sid = request.sid
+        uid = sid_to_uid.pop(sid, None)
+        print(f"🔌 Socket {sid} disconnected")
+        # remove from online_users
+        for board_id in list(online_users.keys()):
+            removed = []
+            for u in list(online_users[board_id].keys()):
+                online_users[board_id][u]["sockets"].discard(sid)
+                if not online_users[board_id][u]["sockets"]:
+                    del online_users[board_id][u]
+                    removed.append(u)
+            for u in removed:
+                emit("user_left", {"uid": u}, room=board_id, include_self=False)
         _broadcast_user_list(board_id)
-
-    # purge from pending (uid/sid maps)
-    for board_id in list(pending_sid_by_uid.keys()):
-        sid_map = pending_sid_by_uid[board_id]
-        uid_map = pending_by_uid[board_id]
-        for pending_uid, pending_sid in list(sid_map.items()):
-            if pending_sid == sid or (uid and pending_uid == uid):
-                sid_map.pop(pending_uid, None)
-                uid_map.pop(pending_uid, None)
-
 
     # -------------------------
     # Note Events
     # -------------------------
-@socketio.on("create_note")
-def handle_create_note(data):
+    @socketio.on("create_note")
+    def handle_create_note(data):
         token = data.get("token")
         decoded = verify_firebase_token(token)
         if not decoded:
@@ -227,10 +140,10 @@ def handle_create_note(data):
         create_note(data)
         data.pop("_id", None)
         print(f"📝 Broadcasting new note to room {data['boardId']}")
-        emit("new_note", data, room=data["boardId"], include_self=False)
+        emit("new_note", data, room=data["boardId"])
 
-@socketio.on("edit_note")
-def handle_edit_note(data):
+    @socketio.on("edit_note")
+    def handle_edit_note(data):
         token = data.get("token")
         decoded = verify_firebase_token(token)
         if not decoded:
@@ -244,10 +157,10 @@ def handle_edit_note(data):
             "user": data["user"]
         })
         print(f"✏️ Broadcasting edited note {data['id']} to room {data['boardId']}")
-        emit("note_edited", data, room=data["boardId"], include_self=False)
+        emit("note_edited", data, room=data["boardId"])
 
-@socketio.on("move_note")
-def handle_move_note(data):
+    @socketio.on("move_note")
+    def handle_move_note(data):
         token = data.get("token")
         decoded = verify_firebase_token(token)
         if not decoded:
@@ -256,10 +169,10 @@ def handle_move_note(data):
 
         update_note(data["id"], {"x": data["x"], "y": data["y"]})
         print(f"📍 Broadcasting moved note {data['id']} to room {data['boardId']}")
-        emit("note_moved", data, room=data["boardId"], include_self=False)
+        emit("note_moved", data, room=data["boardId"])
 
-@socketio.on("delete_note")
-def handle_delete_note(data):
+    @socketio.on("delete_note")
+    def handle_delete_note(data):
         token = data.get("token")
         decoded = verify_firebase_token(token)
         if not decoded:
@@ -268,4 +181,4 @@ def handle_delete_note(data):
 
         delete_note(data["id"])
         print(f"🗑 Broadcasting deleted note {data['id']} to room {data['boardId']}")
-        emit("note_deleted", {"id": data["id"]}, room=data["boardId"], include_self=False)
+        emit("note_deleted", {"id": data["id"]}, room=data["boardId"])
