@@ -89,27 +89,7 @@ class HFZeroShotModel(UXModel):
                 cls._summarizer = _RemoteSummarizerPipeline()
             return cls._classifier, cls._sentiment, cls._summarizer
 
-                # Fallback: lazy import transformers only if needed
 
-
-        def _pick_device() -> int:
-            return 0 if torch.cuda.is_available() else -1
-
-        if cls._classifier is None:
-            cls._classifier = pipeline(
-                "zero-shot-classification", model=HF_ZSC_MODEL,
-                device=_pick_device(), truncation=True
-            )
-        if cls._sentiment is None:
-            cls._sentiment = pipeline(
-                "sentiment-analysis", model=HF_SA_MODEL,
-                device=_pick_device(), truncation=True
-            )
-        if cls._summarizer is None:
-            cls._summarizer = pipeline(
-                "summarization", model=HF_SUM_MODEL, device=_pick_device()
-            )
-        return cls._classifier, cls._sentiment, cls._summarizer
     # ---- Negation-aware patterns ----
     _SAFE_NEGATED_PROBLEMS_RE = re.compile(
         r'\b(?:no|without)\s+(?:major\s+)?(?:issues?|problems?|bugs?|errors?)\b',
