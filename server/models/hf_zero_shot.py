@@ -1,8 +1,7 @@
 from typing import List, Dict, Any, cast, Iterable, Tuple
 import re,os
 from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories,PREF_RANK
-from transformers.pipelines import pipeline
-import torch  # <- lazy import here
+
 
 def _truthy_env(var: str, default="1") -> bool:
     val = os.getenv(var, default)
@@ -27,15 +26,14 @@ USE_HF_SERVERLESS = os.getenv("USE_HF_SERVERLESS", "1") not in {"0", "false", "F
 USE_HF_SERVERLESS = _truthy_env("USE_HF_SERVERLESS", "1")
 # ---- Small adapters that mimic transformers pipelines but call HF API ----
 class _RemoteZeroShotPipeline:
-    def __call__(self, sequences, *, candidate_labels, multi_label=True, batch_size=None,
-                 truncation=True, hypothesis_template="This text is about {}."):
+    def __call__(self, sequences, *, candidate_labels, multi_label=True,
+                 batch_size=None, truncation=True, hypothesis_template="This text is about {}."):
         from services.hf_client import zsc_single
         def one(s: str):
             out = zsc_single(
                 s, candidate_labels,
                 multi_label=multi_label,
                 hypothesis_template=hypothesis_template,
-                model=HF_ZSC_MODEL,
             )
             return {
                 "labels": out.get("labels", []) or [],
@@ -58,7 +56,7 @@ class _RemoteSentimentPipeline:
 class _RemoteSummarizerPipeline:
     def __call__(self, text, max_length=60, min_length=20, do_sample=False):
         from services.hf_client import sum_single
-        return sum_single(text, max_length=max_length, min_length=min_length,do_sample=do_sample, model=HF_SUM_MODEL)
+        return sum_single(text, max_length=max_length, min_length=min_length,do_sample=do_sample)
 
 
 class HFZeroShotModel(UXModel):
