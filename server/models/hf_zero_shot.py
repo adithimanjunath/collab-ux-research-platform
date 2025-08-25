@@ -1,7 +1,8 @@
 from typing import List, Dict, Any, cast, Iterable, Tuple
 import re,os
 from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories,PREF_RANK
-
+from transformers.pipelines import pipeline
+import torch  # <- lazy import here
 
 def _truthy_env(var: str, default="1") -> bool:
     val = os.getenv(var, default)
@@ -91,8 +92,7 @@ class HFZeroShotModel(UXModel):
             return cls._classifier, cls._sentiment, cls._summarizer
 
                 # Fallback: lazy import transformers only if needed
-        from transformers.pipelines import pipeline
-        import torch  # <- lazy import here
+
 
         def _pick_device() -> int:
             return 0 if torch.cuda.is_available() else -1
