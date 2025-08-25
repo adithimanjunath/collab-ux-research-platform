@@ -1,31 +1,11 @@
-# services/hf_client.py
 import os
-import time
 import requests
 
-# Read the token from env (Render > Environment)
-HF_HEADERS = {"Authorization": f"Bearer {os.getenv('HF_API_KEY', '')}"}
+# Hugging Face Space URL (set this in Render env as SPACE_URL=https://<your-space>.hf.space)
+SPACE_URL = os.getenv("SPACE_URL", "").rstrip("/")
 
-def _post(model: str, payload: dict):
-    """
-    Calls the Hugging Face Serverless Inference API for a given model.
-    Handles first-call cold start (503 with estimated_time).
-    """
-    url = f"https://api-inference.huggingface.co/models/{model}"
-    r = requests.post(url, headers=HF_HEADERS, json=payload, timeout=60)
-
-    # Cold start → wait once and retry
-    if r.status_code == 503:
-        try:
-            if r.headers.get("content-type", "").startswith("application/json"):
-                wait = float(r.json().get("estimated_time", 8.0))
-                time.sleep(min(30.0, wait))
-                r = requests.post(url, headers=HF_HEADERS, json=payload, timeout=60)
-        except Exception:
-            pass
-
-    r.raise_for_status()
-    return r.json()
+if not SPACE_URL:
+    raise RuntimeError("SPACE_URL environment variable is not set! Example: https://username-spacename.hf.space")
 
 # ---------- Zero-shot (single text) ----------
 def zsc_single(
@@ -34,43 +14,29 @@ def zsc_single(
     *,
     multi_label: bool = True,
     hypothesis_template: str = "This text is about {}.",
-    model: str | None = None,
 ):
-    model = model or os.getenv(
-        "HF_ZSC_MODEL",
-        "MoritzLaurer/deberta-v3-large-zeroshot-v2.0-c",
-    )
-    return _post(
-        model,
-        {
-            "inputs": text,
-            "parameters": {
-                "candidate_labels": labels,
-                "multi_label": multi_label,
-                "hypothesis_template": hypothesis_template,
-            },
-            "options": {"wait_for_model": True},
+    """Call your Space /predict endpoint for zero-shot classification."""
+    r = requests.post(
+        f"{SPACE_URL}/predict",
+        json={
+            "text": text,
+            "labels": labels,
+            "multi_label": multi_label,
+            "template": hypothesis_template,
         },
+        timeout=60,
     )
+    r.raise_for_status()
+    return r.json()
+
 
 # ---------- Sentiment (single text) ----------
-def sa_single(text: str, model: str | None = None):
-    model = model or os.getenv(
-        "HF_SA_MODEL",
-        "distilbert-base-uncased-finetuned-sst-2-english",
-    )
-    out = _post(model, {"inputs": text, "options": {"wait_for_model": True}})
-    # Normalize shapes that the API may return to: {"label": "...", "score": float}
-    if isinstance(out, list):
-        # some backends return [[{label,score}]] or [{label,score}]
-        first = out[0] if out else {}
-        if isinstance(first, list):
-            first = first[0] if first else {}
-        if isinstance(first, dict):
-            return {"label": first.get("label", ""), "score": float(first.get("score", 0.0))}
-    if isinstance(out, dict):
-        return {"label": out.get("label", ""), "score": float(out.get("score", 0.0))}
-    return {"label": "", "score": 0.0}
+def sa_single(text: str):
+    """Call your Space /sa endpoint for sentiment analysis."""
+    r = requests.post(f"{SPACE_URL}/sa", json={"text": text}, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
 
 # ---------- Summarization (single text) ----------
 def sum_single(
@@ -79,20 +45,17 @@ def sum_single(
     max_length: int = 60,
     min_length: int = 20,
     do_sample: bool = False,
-    model: str | None = None,
 ):
-    model = model or os.getenv("HF_SUM_MODEL", "t5-small")
-    out = _post(
-        model,
-        {
-            "inputs": text,
-            "parameters": {
-                "max_length": max_length,
-                "min_length": min_length,
-                "do_sample": do_sample,
-            },
-            "options": {"wait_for_model": True},
+    """Call your Space /sum endpoint for summarization."""
+    r = requests.post(
+        f"{SPACE_URL}/sum",
+        json={
+            "text": text,
+            "max_length": max_length,
+            "min_length": min_length,
+            "do_sample": do_sample,
         },
+        timeout=60,
     )
-    # Match transformers pipeline shape: list[{"summary_text": "..."}]
-    return out if isinstance(out, list) else [out]
+    r.raise_for_status()
+    return r.json()
