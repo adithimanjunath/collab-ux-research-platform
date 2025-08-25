@@ -24,7 +24,6 @@ function Board() {
   const boardRef = useRef(null);
   const navigate = useNavigate();
   const theme = useTheme()
-  const joinedRef = useRef(false); 
 
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
@@ -33,13 +32,16 @@ function Board() {
   const headerRef = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(0);
 
+  // Demo-only gate overlay
+  const [waiting, setWaiting] = useState(false); // shows overlay while requesting/approving
+  const [gatePhase, setGatePhase] = useState("idle"); // 'idle' | 'request' | 'granted'
+  const [gateMessage, setGateMessage] = useState("");
+  // track latest others count to avoid stale closures
+  const othersCountRef = useRef(0);
+
   const [notes, setNotes] = useState([]);
-  const [waiting, setWaiting] = useState(false);
-  const [allowed, setAllowed] = useState(false);  
-  const onWaiting  = () => setWaiting(true);
-  const onGranted  = () => setWaiting(false); // first user path
-  const onApproved = () => setWaiting(false); // approved by a member
-  const onRejected = () => setWaiting(false); // optional: also clear overlay
+  // Demo-only overlay flag (no real approval). First user sees no popup; others see ~1s.
+  
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("note");
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +58,72 @@ function Board() {
   }
 }, []);
 
-  // ---------- Firestore Presence ----------
+// ---------- Demo-only overlay (no real approval) ----------
+// Only show a quick 1s overlay for **new** joiners if someone else is already online.
+// No overlay for the very first user or for users who were already on the board.
+const hasSeenSelfRef = useRef(false);
+
+useEffect(() => {
+  if (!user || !boardId) return;
+  const list = Array.isArray(onlineUsers) ? onlineUsers : [];
+  const iAmListed = list.some((u) => u?.uid === user.uid);
+
+  // Mark once when we first see ourselves in presence,
+  // but do NOT open/close the overlay here (socket event is the single source of truth).
+  if (!hasSeenSelfRef.current && iAmListed) {
+    hasSeenSelfRef.current = true;
+  }
+
+  // Keep a live ref of others count to use inside socket callbacks
+  const oc = list.filter((u) => u?.uid && u.uid !== user?.uid).length;
+  othersCountRef.current = oc;
+  console.debug("[gate] presence updated | iAmListed=", iAmListed, "othersCount=", oc);
+}, [onlineUsers, user, boardId]);
+
+// Also keep the ref up to date independently (in case presence changes after socket events)
+useEffect(() => {
+  const list = Array.isArray(onlineUsers) ? onlineUsers : [];
+  const oc = list.filter((u) => u?.uid && u.uid !== user?.uid).length;
+  othersCountRef.current = oc;
+}, [onlineUsers, user]);
+
+  // ---------- Demo gate autopilot (frontend-only) ----------
+  // If a non-first user joins, show a short request phase, then auto-grant
+  useEffect(() => {
+    console.debug("[gate] autopilot tick | waiting=", waiting, "phase=", gatePhase);
+    if (!waiting) return; // only run while overlay visible
+    let toGrant, toClose, toFailsafe;
+
+    if (gatePhase === "request") {
+      // After ~1.5s, pretend someone approved
+      toGrant = setTimeout(() => {
+        setGatePhase("granted");
+        setGateMessage("You're in! Enjoy collaborating.");
+      }, 1500);
+      // Absolute failsafe: if something interrupts state changes, force-close after 5s
+      toFailsafe = setTimeout(() => {
+        setGatePhase("granted");
+        setGateMessage("You're in! Enjoy collaborating.");
+      }, 4000);
+    }
+
+    if (gatePhase === "granted") {
+      // Keep the success state visible for ~2.5s, then close
+      toClose = setTimeout(() => {
+        setWaiting(false);
+        setGatePhase("idle");
+        setGateMessage("");
+      }, 2500);
+    }
+
+    return () => {
+      if (toGrant) clearTimeout(toGrant);
+      if (toClose) clearTimeout(toClose);
+      if (toFailsafe) clearTimeout(toFailsafe);
+    };
+  }, [waiting, gatePhase]);
+
+// ---------- Firestore Presence ----------
   const joinBoardPresence = async (boardId, user) => {
     const ref = doc(db, "boards", boardId, "onlineUsers", user.uid);
     await setDoc(ref, {
@@ -128,17 +195,17 @@ function Board() {
 
   // ---------- Firestore Presence Listeners ----------
   useEffect(() => {
-    if (boardId && user && allowed) {
+    if (boardId && user) {
       joinBoardPresence(boardId, user);
       const unsubPresence = listenOnlineUsers(boardId);
       const unsubTyping = listenTypingUsers(boardId, user);
        return () => { leaveBoardPresence(boardId, user); unsubPresence(); unsubTyping(); };
     }
-  }, [boardId, user, allowed]);
+  }, [boardId, user]);
 
   // ---------- Load Notes from MongoDB on Mount/Refresh ----------
   useEffect(() => {
-    if (!boardId || !user || !allowed) return;
+    if (!boardId || !user) return;
     setIsLoading(true);
     fetchNotesByBoard(boardId)
       .then((data) => {
@@ -147,57 +214,11 @@ function Board() {
       })
       .catch((err) => console.error("❌ Failed to load notes:", err.message))
       .finally(() => setIsLoading(false));
-  }, [boardId, user, allowed]);
+  }, [boardId, user]);
 
   // ---------- Socket Connection ----------
   useEffect(() => {
     if (!boardId || !user) return;
-
-    const handleJoinRequest = (data) => {
-    if (data.boardId !== boardId) return;
-    const requester = data.user?.name || "user";
-    const ok = window.confirm(`${requester} wants to join board ${boardId}.  Approve?`);
-    if (ok) {
-      socket.emit("approve_user", {
-        boardId,
-        uid: data.user?.uid
-      });
-    } else {
-      socket.emit("reject_user", {
-        boardId,
-        uid: data.user?.uid
-      });
-    }
-  };
-  const handleWaiting   = () => {setWaiting(true);  setAllowed(false);};
-  const handleGranted = () => {
-    console.log("join_granted");
-    setWaiting(false);
-    setAllowed(true);
-    joinedRef.current = true;
-  };
-    const handleRejected = () => {
-    console.log("join_rejected");
-    setWaiting(false);
-    setAllowed(false);
-    // Optional: navigate away or show a message
-    alert("Your request to join the board was rejected.");
-    navigate("/");
-  };
-
-
-  
-// const handleJoinRequest = (data) => {
-//   if (data.boardId !== boardId) return;
-//   const requester = data.user?.name || "user";
-//   const ok = window.confirm(`${requester} wants to join board ${boardId}. Accept?`);
-//   if (ok) {
-//     // MUST send the sid so server can place that socket into the room
-//     socket.emit("approve_user", { boardId, sid: data.sid });
-//   } else {
-//     socket.emit("reject_user", { boardId, sid: data.sid });
-//   }
-// };
 
     const handleNewNote = (note) => {
       if (note.boardId !== boardId) return;
@@ -222,29 +243,44 @@ function Board() {
       );
     };
 
-    const handleLoadExisting = (existing) => {
-    // defensive: make sure it's an array
-    const arr = Array.isArray(existing) ? existing : [];
-    setNotes(arr.filter((n) => n.boardId === boardId));
+    const handleLoadExisting = (payload) => {
+      const arr = Array.isArray(payload) ? payload : (payload?.notes ?? []);
+      setNotes(arr.filter((n) => n.boardId === boardId));
+    };
+
+
+  const handleJoinGranted = (payload) => {
+    // Prefer the server’s count if provided; fall back to our presence ref.
+    const serverCount = typeof payload?.othersCount === "number" ? payload.othersCount : null;
+    const oc = serverCount !== null ? serverCount : Number(othersCountRef.current || 0);
+    console.debug("[gate] join_granted received | payload=", payload, "effectiveOthersCount=", oc);
+
+    if (oc <= 0) {
+      // First user: skip the overlay entirely
+      setWaiting(false);
+      setGatePhase("idle");
+      setGateMessage("");
+      return;
+    }
+
+    // Non-first users: show short success overlay
+    setWaiting(true);
+    setGatePhase("granted");
+    setGateMessage("You're in! Enjoy collaborating.");
+    setTimeout(() => {
+      setWaiting(false);
+      setGatePhase("idle");
+      setGateMessage("");
+    }, 3000);
   };
 
-
-   const handleApprovedBroadcast = (payload) => {
-    setWaiting(false);
-  };
-
-  const handleApproved  = () => { setWaiting(false); setAllowed(true); joinedRef.current = true; };
-
-  socket.on("waiting_for_approval", handleWaiting);
-  socket.on("join_granted", handleGranted);
-  socket.on("join_rejected", handleRejected);
-  socket.on("join_request", (d) => { console.log("join_request", d); handleJoinRequest(d); });
   socket.on("new_note",              handleNewNote);
   socket.on("note_edited",           handleNoteEdited);
   socket.on("note_deleted",          handleNoteDeleted);
   socket.on("note_moved",            handleNoteMoved);
   socket.on("load_existing_notes",   handleLoadExisting);
-  socket.on("join_approved_broadcast", handleApprovedBroadcast);
+  socket.on("join_granted",          handleJoinGranted);
+  console.debug("[socket] listeners registered for board", boardId);
 
 
     (async () => {
@@ -266,18 +302,15 @@ function Board() {
   })();
 
     return () => {
-    socket.off("waiting_for_approval", handleWaiting);
-    socket.off("join_granted", handleGranted);
-    socket.off("join_approved_broadcast", handleApprovedBroadcast);
-    socket.off("join_rejected", handleRejected);
-    socket.off("join_request",         handleJoinRequest);
-    socket.off("new_note",             handleNewNote);
-    socket.off("note_edited",          handleNoteEdited);
-    socket.off("note_deleted",         handleNoteDeleted);
-    socket.off("note_moved",           handleNoteMoved);
-    socket.off("load_existing_notes",  handleLoadExisting);
-
-  };
+      socket.off("new_note",             handleNewNote);
+      socket.off("note_edited",          handleNoteEdited);
+      socket.off("note_deleted",         handleNoteDeleted);
+      socket.off("note_moved",           handleNoteMoved);
+      socket.off("load_existing_notes",  handleLoadExisting);
+      socket.off("join_granted",         handleJoinGranted);
+      socket.off("connect");
+      socket.off("connect_error");
+    };
   }, [boardId, user,navigate]);
 
 
@@ -370,11 +403,11 @@ function Board() {
   };
 
   const filteredNotes = useMemo(() => {
-    const arr = Array.isArray(notes) ? notes : [];
-    const anyChecked = Object.values(filter).some(Boolean);
-    if (!anyChecked) return notes;
-    return arr.filter((n) => filter[n?.type] ?? false);
-  }, [notes, filter]);
+  const arr = Array.isArray(notes) ? notes : [];
+  const anyChecked = Object.values(filter).some(Boolean);
+  if (!anyChecked) return arr;
+  return arr.filter((n) => filter[n?.type] ?? false);
+}, [notes, filter]);
 
   if (!user) {
     return null;
@@ -382,6 +415,36 @@ function Board() {
 
   return (
     <div className="relative h-screen w-screen" style={{ backgroundColor: theme.palette.background.default }}  >
+      {waiting && (
+        <div
+          data-testid="board-gate-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40"
+          role="dialog"
+          aria-modal="true"
+          aria-label={gatePhase === "request" ? "Requesting access" : "Access granted"}
+          style={{ pointerEvents: "auto" }}
+        >
+          <div className="rounded-lg bg-white p-6 shadow-xl text-center min-w-[280px]">
+            {gatePhase === "request" ? (
+              <>
+                <h3 className="text-lg font-medium">{gateMessage || "Requesting access..."}</h3>
+                <p className="text-gray-600 mt-2">Waiting for an existing member to approve your request.</p>
+                <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mt-4" />
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-medium">{gateMessage || "You're in!"}</h3>
+                <div className="mx-auto mt-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6 text-green-600">
+                    <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.963a.75.75 0 10-1.22-.874l-3.236 4.52-1.53-1.53a.75.75 0 10-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.656-5.332z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <p className="text-gray-600 mt-2">Opening the board…</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       <div ref= {headerRef}>
       <Header
   mode="board"
@@ -400,17 +463,6 @@ function Board() {
     setFilter((prev) => ({ ...prev, [type]: !prev[type] }))
   }
 />
-{waiting && !allowed && (
-  <div className="absolute inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-    <div className="rounded-lg bg-white p-6 shadow-xl text-center">
-      <h3 className="text-lg font-medium">Requesting access...</h3>
-      <p className="text-gray-600 mt-2">Waiting for an existing member to approve your request.</p>
-      <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mt-4" />
-    </div>
-  </div>
-)}
-
-
       </div>
       <div className="h-full flex justify-center items-center overflow-hidden" style={{padding: `${headerHeight + 10}px`}}>
         <div
