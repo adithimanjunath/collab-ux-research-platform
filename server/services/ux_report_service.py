@@ -104,15 +104,26 @@ def _extract_text_from_bytes(file_bytes: bytes, filename: str) -> str:
         return _extract_text_from_pdf_bytes(file_bytes)
     except Exception:
         return _decode_bytes(file_bytes)
+    
+
+def _require_model():
+    """Resolve the active model and raise clear errors when missing."""
+    if get_active_model is None:
+        raise RuntimeError("Model registry not available")
+    model = get_active_model()
+    if model is None:
+        raise RuntimeError("No active model configured")
+    return model
+
 
 # ---------- public functions (unchanged signatures) ----------
 def analyze_text_blob(text: str) -> Dict[str, Any]:
     items = _answers_only_from_text(text or "")
-    model = get_active_model()
+    model = _require_model()
     return model.analyze_feedback_items(items)
 
 def analyze_uploaded_file(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     text = _extract_text_from_bytes(file_bytes, filename)
     items = _answers_only_from_text(text)
-    model = get_active_model()
+    model = _require_model()
     return model.analyze_feedback_items(items)
