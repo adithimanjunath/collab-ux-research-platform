@@ -15,6 +15,42 @@ def _pick_device() -> int:
         return 0
     return -1
 
+USE_HF_SERVERLESS = os.getenv("USE_HF_SERVERLESS", "1") not in {"0", "false", "False"}
+
+# ---- Small adapters that mimic transformers pipelines but call HF API ----
+class _RemoteZeroShotPipeline:
+    def __call__(self, sequences, *, candidate_labels, multi_label=True, batch_size=None,
+                 truncation=True, hypothesis_template="This text is about {}."):
+        from services.hf_client import zsc_single
+        def one(s: str):
+            out = zsc_single(
+                s, candidate_labels,
+                multi_label=multi_label,
+                hypothesis_template=hypothesis_template,
+            )
+            return {
+                "labels": out.get("labels", []) or [],
+                "scores": [float(x) for x in (out.get("scores", []) or [])],
+            }
+        if isinstance(sequences, (list, tuple)):
+            return [one(s) for s in sequences]
+        return one(sequences)
+
+class _RemoteSentimentPipeline:
+    def __call__(self, sequences, batch_size=None, truncation=True):
+        from services.hf_client import sa_single
+        def one(s: str):
+            out = sa_single(s)
+            return {"label": out.get("label", ""), "score": float(out.get("score", 0.0))}
+        if isinstance(sequences, (list, tuple)):
+            return [one(s) for s in sequences]
+        return one(sequences)
+
+class _RemoteSummarizerPipeline:
+    def __call__(self, text, max_length=60, min_length=20, do_sample=False):
+        from services.hf_client import sum_single
+        return sum_single(text, max_length=max_length, min_length=min_length, do_sample=do_sample)
+
 
 class HFZeroShotModel(UXModel):
     name = "hf_zero_shot"
@@ -79,43 +115,58 @@ class HFZeroShotModel(UXModel):
 
     @classmethod
     def _get_pipes(cls):
+            # Prefer remote (HF serverless) if enabled
+        if USE_HF_SERVERLESS:
+            if cls._classifier is None:
+                cls._classifier = _RemoteZeroShotPipeline()
+            if cls._sentiment is None:
+                cls._sentiment = _RemoteSentimentPipeline()
+            if cls._summarizer is None:
+                cls._summarizer = _RemoteSummarizerPipeline()
+            return cls._classifier, cls._sentiment, cls._summarizer
+                # ---- Fallback: local transformers (original behavior) ----
         if cls._classifier is None:
-            cls._classifier = pipeline("zero-shot-classification", model="MoritzLaurer/deberta-v3-large-zeroshot-v1", device = _pick_device(), truncation= True,)
+            cls._classifier = pipeline(
+                "zero-shot-classification",
+                model="MoritzLaurer/deberta-v3-large-zeroshot-v1",
+                device=_pick_device(),
+                truncation=True,
+            )
         if cls._sentiment is None:
-            cls._sentiment = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english", device = _pick_device(), truncation= True,)
+            cls._sentiment = pipeline(
+                "sentiment-analysis",
+                model="distilbert-base-uncased-finetuned-sst-2-english",
+                device=_pick_device(),
+                truncation=True,
+            )
         if cls._summarizer is None:
-            cls._summarizer = pipeline("summarization", model="t5-small", device = _pick_device())
+            cls._summarizer = pipeline(
+                "summarization",
+                model="t5-small",
+                device=_pick_device(),
+            )
         return cls._classifier, cls._sentiment, cls._summarizer
     
     @staticmethod
     def _has_suggestion_keyword(text: str) -> bool:
         """Return True if text implies a critique/suggestion (negation-aware)."""
-    # Already case-insensitive patterns; no need to lowercase the input.
         if HFZeroShotModel._SAFE_NEGATED_PROBLEMS_RE.search(text):
             return False
-
-    # Keyword patterns (compiled)
         for rx in HFZeroShotModel._KEYWORD_PATTERNS:
             if rx.search(text):
                 return True
-
-    # Problem terms (compiled) only if not negated nearby
         for rx in HFZeroShotModel._PROBLEM_TERMS:
          for m in rx.finditer(text):                         # <— use the compiled pattern
             window = text[max(0, m.start() - 24): m.start()]
             if HFZeroShotModel._NEGATION_WINDOW_RE.search(window):
                 continue
             return True
-
         return False
 
-    
     @staticmethod
     def _strip_mixed_clause(feedback: str) -> str:
         """Keep the 'problem' clause in mixed praise/critique sentences."""
         lower = feedback.lower()
-        # why: avoid splitting on unrelated 'but/however' in names/URLs
-        # simple heuristic with spaces; cheap and usually effective
         for delim in (" but ", " however "):
             idx = lower.find(delim)
             if idx != -1:
@@ -124,6 +175,7 @@ class HFZeroShotModel(UXModel):
         if lower.startswith(("although", "though")) and "," in feedback:
             return feedback.split(",", 1)[1].strip().lstrip(".,:;! ")
         return feedback.strip()
+    
     @staticmethod
     def _extract_praise_clause(text: str) -> str:
         """
@@ -139,13 +191,11 @@ class HFZeroShotModel(UXModel):
         for s in reversed(sentences):
             if pos_rx.search(s):
                 return s.strip()
-
         lower = text.lower()
         for delim in (" but ", " however "):
             idx = lower.find(delim)
             if idx != -1:
                 return text[idx + len(delim):].strip().lstrip(".,:;! ")
-
         return text.strip()
 
     @staticmethod
@@ -184,11 +234,7 @@ class HFZeroShotModel(UXModel):
             score = float(sa.get("score", 0.0))
             pos_prob = score if label == "POSITIVE" else (1.0 - score)
             neg_prob = 1.0 - pos_prob
-
-            if suggestive:
-                is_critique_mask.append(True)
-            else:
-                is_critique_mask.append(neg_prob >= self.CRITIQUE_NEG_PROB)
+            is_critique_mask.append(True if suggestive else (neg_prob >= self.CRITIQUE_NEG_PROB))
 
         # --- 2) Build critique set (with clause focusing)
         critiques: List[str] = []
@@ -217,8 +263,6 @@ class HFZeroShotModel(UXModel):
                     ),
                 )
                 zsc_outputs.extend(out)
-                assigned_texts = set()
-
 
             for crit_text, z in zip(critiques, zsc_outputs):
                 labels = z.get("labels", []) or []
@@ -226,7 +270,6 @@ class HFZeroShotModel(UXModel):
 
                 sorted_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
                 kept = [(labels[i], scores[i]) for i in sorted_idx[:self.TOP_K] if scores[i] >= self.ZSC_THRESHOLD]
-
                 kept = [(lab, sc) for (lab, sc) in kept if passes_category_gate(lab, crit_text)]
             
                 # prefer specific UX themes over generic "Feedback"
@@ -240,21 +283,20 @@ class HFZeroShotModel(UXModel):
                 
                 lower = crit_text.lower()
                 if not kept:   # only if model didn’t give us anything above threshold
-    # Usability heuristics
+                    # Usability heuristics
                     if any(word in lower for word in ["confusing", "not intuitive", "hard to find"]):
                         kept.append(("Usability", 0.51))   # assign minimal score
 
-    # Navigation heuristics
+                    # Navigation heuristics
                 if ("navigation" in lower or "find the settings" in lower or re.search(r"\b(could(?:n['’]t| not)|can(?:n['’]t| not))\s+find.*\bsubmit\s+button\b", lower)):
                     kept.append(("Navigation", 0.51))
 
-    # NEW: Responsiveness heuristics (unresponsive, layout breaks/overlap, mobile issues)
+                # NEW: Responsiveness heuristics (unresponsive, layout breaks/overlap, mobile issues)
                 if (re.search(r"\bunresponsive\b", lower) or
                     re.search(r"\blayout\s*(?:breaks?|broken)\b", lower) or
                     re.search(r"\boverlap\w*\b", lower) or
                     re.search(r"\b(responsive|breakpoint|mobile|tablet|phone|screen\s*size|resize|viewport)\b", lower)):
                     kept.append(("Responsiveness", 0.51))
-
 
                 for lab, sc in kept:
                     if lab in category_counts:
