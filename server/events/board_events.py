@@ -110,7 +110,7 @@ def register_socket_events(socketio):
         print(f"🚪 Socket {sid} left board {board_id}")
 
     @socketio.on("disconnect")
-    def disconnect():
+    def disconnect(*args):
         sid = request.sid
         uid = sid_to_uid.pop(sid, None)
         print(f"🔌 Socket {sid} disconnected")
