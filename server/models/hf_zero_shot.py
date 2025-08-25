@@ -1,6 +1,11 @@
 from typing import List, Dict, Any, cast, Iterable, Tuple
 import re,os
-from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories
+from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories,PREF_RANK
+
+
+def _truthy_env(var: str, default="1") -> bool:
+    val = os.getenv(var, default)
+    return str(val).strip().lower() not in {"0", "false", "no", "off", ""}
 
 try:
     import torch  # why: detect GPU and avoid needless CPU-only runs
@@ -13,11 +18,12 @@ def _pick_device() -> int:
     if _HAS_TORCH and hasattr(torch, "cuda") and torch.cuda.is_available():
         return 0
     return -1
+
 HF_ZSC_MODEL = os.getenv("HF_ZSC_MODEL", "MoritzLaurer/deberta-v3-large-zeroshot-v2.0-c")
 HF_SA_MODEL  = os.getenv("HF_SA_MODEL",  "distilbert-base-uncased-finetuned-sst-2-english")
 HF_SUM_MODEL = os.getenv("HF_SUM_MODEL", "t5-small")
 USE_HF_SERVERLESS = os.getenv("USE_HF_SERVERLESS", "1") not in {"0", "false", "False"}
-
+USE_HF_SERVERLESS = _truthy_env("USE_HF_SERVERLESS", "1")
 # ---- Small adapters that mimic transformers pipelines but call HF API ----
 class _RemoteZeroShotPipeline:
     def __call__(self, sequences, *, candidate_labels, multi_label=True, batch_size=None,
@@ -85,7 +91,12 @@ class HFZeroShotModel(UXModel):
             return cls._classifier, cls._sentiment, cls._summarizer
 
                 # Fallback: lazy import transformers only if needed
-        from transformers.pipelines import pipeline  # <- lazy import here
+        from transformers.pipelines import pipeline
+        import torch  # <- lazy import here
+
+        def _pick_device() -> int:
+            return 0 if torch.cuda.is_available() else -1
+
         if cls._classifier is None:
             cls._classifier = pipeline(
                 "zero-shot-classification", model=HF_ZSC_MODEL,
