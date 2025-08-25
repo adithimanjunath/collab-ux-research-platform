@@ -160,4 +160,10 @@ yarn-error.log*
 # server
 venv
 __pycache__
+package-lock.json
+.coverage
 *.json
+
+# client
+
+.__pycache__.pyte
