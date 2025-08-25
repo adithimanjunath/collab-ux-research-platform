@@ -38,7 +38,7 @@ def zsc_single(
 ):
     model = model or os.getenv(
         "HF_ZSC_MODEL",
-        "MoritzLaurer/deberta-v3-large-zeroshot-v1",
+        "MoritzLaurer/deberta-v3-large-zeroshot-v2.0-c",
     )
     return _post(
         model,

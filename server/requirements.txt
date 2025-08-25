@@ -22,3 +22,4 @@ pytest
 pytest-cov
 mongomock
 requests-mock
+requests
