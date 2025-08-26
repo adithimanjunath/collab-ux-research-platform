@@ -2,28 +2,6 @@ from typing import List, Dict, Any, cast, Iterable, Tuple
 import re,os
 from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories,PREF_RANK
 
-
-def _truthy_env(var: str, default="1") -> bool:
-    val = os.getenv(var, default)
-    return str(val).strip().lower() not in {"0", "false", "no", "off", ""}
-
-try:
-    import torch  # why: detect GPU and avoid needless CPU-only runs
-    _HAS_TORCH = True
-except Exception:
-    _HAS_TORCH = False
-
-def _pick_device() -> int:
-    # why: pick GPU when available for large batches
-    if _HAS_TORCH and hasattr(torch, "cuda") and torch.cuda.is_available():
-        return 0
-    return -1
-
-HF_ZSC_MODEL = os.getenv("HF_ZSC_MODEL", "MoritzLaurer/deberta-v3-large-zeroshot-v2.0-c")
-HF_SA_MODEL  = os.getenv("HF_SA_MODEL",  "distilbert-base-uncased-finetuned-sst-2-english")
-HF_SUM_MODEL = os.getenv("HF_SUM_MODEL", "t5-small")
-USE_HF_SERVERLESS = os.getenv("USE_HF_SERVERLESS", "1") not in {"0", "false", "False"}
-USE_HF_SERVERLESS = _truthy_env("USE_HF_SERVERLESS", "1")
 # ---- Small adapters that mimic transformers pipelines but call HF API ----
 class _RemoteZeroShotPipeline:
     def __call__(self, sequences, *, candidate_labels, multi_label=True,
@@ -47,7 +25,7 @@ class _RemoteSentimentPipeline:
     def __call__(self, sequences, batch_size=None, truncation=True):
         from services.hf_client import sa_single
         def one(s: str):
-            out = sa_single(s, model=HF_SA_MODEL)
+            out = sa_single(s)
             return {"label": out.get("label", ""), "score": float(out.get("score", 0.0))}
         if isinstance(sequences, (list, tuple)):
             return [one(s) for s in sequences]
@@ -80,7 +58,6 @@ class HFZeroShotModel(UXModel):
     @classmethod
     def _get_pipes(cls):
                # Prefer remote (HF serverless)
-        if USE_HF_SERVERLESS:
             if cls._classifier is None:
                 cls._classifier = _RemoteZeroShotPipeline()
             if cls._sentiment is None:
@@ -88,7 +65,16 @@ class HFZeroShotModel(UXModel):
             if cls._summarizer is None:
                 cls._summarizer = _RemoteSummarizerPipeline()
             return cls._classifier, cls._sentiment, cls._summarizer
-
+    @staticmethod
+    def _dedupe_keep_order(seq: list[str]) -> list[str]:
+        seen = set()
+        out = []
+        for s in seq:
+            key = s.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(s)
+        return out
 
     # ---- Negation-aware patterns ----
     _SAFE_NEGATED_PROBLEMS_RE = re.compile(
@@ -121,16 +107,6 @@ class HFZeroShotModel(UXModel):
         r'\b(?:no|not|without|never|hardly any|rarely any|no major|no significant)\b',
         re.IGNORECASE,
     )
-    @staticmethod
-    def _dedupe_keep_order(seq: list[str]) -> list[str]:
-        seen = set()
-        out = []
-        for s in seq:
-            key = s.strip().lower()
-            if key and key not in seen:
-                seen.add(key)
-                out.append(s)
-        return out
 
     @staticmethod
     def _has_suggestion_keyword(text: str) -> bool:
@@ -223,16 +199,13 @@ class HFZeroShotModel(UXModel):
 
         # --- 2) Build critique set (with clause focusing)
         critiques: List[str] = []
-        critique_indices: List[int] = []
-        for idx, (text, is_crit) in enumerate(zip(items, is_critique_mask)):
+        for text, is_crit in zip(items, is_critique_mask):
             if is_crit:
                 critiques.append(self._strip_mixed_clause(text))
-                critique_indices.append(idx)
+                
 
         # --- 3) Multi-label ZSC on critiques (batched)
-        category_counts: Dict[str, int] = {cat: 0 for cat in CATEGORIES}
         category_feedbacks: Dict[str, List[str]] = {cat: [] for cat in CATEGORIES}
-
         if critiques:
             zsc_outputs: List[Dict[str, Any]] = []
             for _, chunk in self._batch(critiques, size=self.BATCH_ZSC):
@@ -281,11 +254,11 @@ class HFZeroShotModel(UXModel):
                         re.search(r"\boverlap\w*\b", lower) or
                         re.search(r"\b(responsive|breakpoint|mobile|tablet|phone|screen\s*size|resize|viewport)\b", lower)):
                         kept.append(("Responsiveness", 0.51))
-
-                for lab, in kept:
-                    if lab in category_counts:
-                        if crit_text not in category_feedbacks[lab]:  
-                            category_counts[lab] += 1
+                seen_labs = set()
+                for lab, _ in kept:
+                    if lab in CATEGORIES and lab not in seen_labs:
+                        seen_labs.add(lab)
+                        if crit_text not in category_feedbacks[lab]:
                             category_feedbacks[lab].append(crit_text)
 
         # --- 4) Delight: top-1 label on positives (batched, optional cap)
