@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify,current_app
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import RequestEntityTooLarge 
 from services.ux_report_service import analyze_text_blob, analyze_uploaded_file
+from auth.auth_decorator import authenticate_request
 import requests
 
 ux_bp = Blueprint("ux_report", __name__)
@@ -17,8 +18,12 @@ def ready():
     # Optionally check that the active model is loaded
     return "ready", 200
 
-@ux_bp.route("/api/ux/analyze", methods=["POST", "OPTIONS"], strict_slashes=False)
-@ux_bp.route("/api/ux/analyze", methods=["POST", "OPTIONS"], strict_slashes=False)
+@ux_bp.route("/api/ux/analyze", methods=["OPTIONS"], strict_slashes=False)
+def analyze_options():
+    return "", 200
+
+@ux_bp.route("/api/ux/analyze", methods=["POST"], strict_slashes=False)
+@authenticate_request
 def analyze():
     """
     Accepts:
@@ -28,10 +33,6 @@ def analyze():
     Returns JSON:
       { top_insight, pie_data, insights, positive_highlights, delight_distribution }
     """
-    # 0) CORS preflight
-    if request.method == "OPTIONS":
-        return "", 200
-
     try:
         # 1) Safely parse JSON (if Content-Type is application/json)
         json_body = request.get_json(silent=True) if request.is_json else None  # CHANGED
@@ -90,7 +91,6 @@ def analyze():
         traceback.print_exc(file=sys.stderr)
         current_app.logger.exception("Analyze failed")
         return jsonify({"error": "internal_error", "message": str(e)}), 500
-
 
 
 
