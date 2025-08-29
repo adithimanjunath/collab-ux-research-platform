@@ -57,7 +57,9 @@ def docs():
               url: '/openapi.yaml',
               dom_id: '#swagger-ui',
               presets: [SwaggerUIBundle.presets.apis],
-              layout: 'BaseLayout'
+              layout: 'BaseLayout',
+              deepLinking: true,
+              persistAuthorization: true
             });
           };
         </script>

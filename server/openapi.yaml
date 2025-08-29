@@ -4,6 +4,8 @@ info:
   version: 1.0.0
 servers:
   - url: http://localhost:5050
+security:
+  - bearerAuth: []
 components:
   securitySchemes:
     bearerAuth:
@@ -65,6 +67,7 @@ paths:
   /:
     get:
       summary: Backend home
+      security: []
       responses:
         '200':
           description: OK
@@ -77,11 +80,13 @@ paths:
   /health:
     get:
       summary: Health check
+      security: []
       responses:
         '200': { description: OK }
   /ready:
     get:
       summary: Readiness check
+      security: []
       responses:
         '200': { description: Ready }
   /api/notes:
