@@ -199,7 +199,10 @@ useEffect(() => {
       joinBoardPresence(boardId, user);
       const unsubPresence = listenOnlineUsers(boardId);
       const unsubTyping = listenTypingUsers(boardId, user);
-       return () => { leaveBoardPresence(boardId, user); unsubPresence(); unsubTyping(); };
+       return () => { leaveBoardPresence(boardId, user); 
+        if (typeof unsubPresence === 'function') unsubPresence();
+         if (typeof unsubTyping === 'function')  unsubTyping();
+         };
     }
   }, [boardId, user]);
 
