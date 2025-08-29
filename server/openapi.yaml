@@ -1,0 +1,182 @@
+openapi: 3.1.0
+info:
+  title: Collab UX Research Platform API
+  version: 1.0.0
+servers:
+  - url: http://localhost:5050
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Note:
+      type: object
+      required: [id, boardId, text]
+      properties:
+        id: { type: string }
+        boardId: { type: string }
+        text: { type: string }
+        x: { type: number }
+        y: { type: number }
+        type: { type: string, enum: [note, idea, issue, research] }
+        user:
+          type: object
+          properties:
+            uid: { type: string }
+            name: { type: string }
+            email: { type: string }
+    User:
+      type: object
+      properties:
+        uid: { type: string }
+        name: { type: string }
+        email: { type: string }
+    PieItem:
+      type: object
+      properties:
+        name: { type: string }
+        value: { type: integer }
+    UXReport:
+      type: object
+      properties:
+        top_insight: { type: string }
+        pie_data:
+          type: array
+          items: { $ref: '#/components/schemas/PieItem' }
+        insights:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+        positive_highlights:
+          type: array
+          items: { type: string }
+        delight_distribution:
+          type: array
+          items: { $ref: '#/components/schemas/PieItem' }
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        message: { type: string }
+paths:
+  /:
+    get:
+      summary: Backend home
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: OK }
+  /ready:
+    get:
+      summary: Readiness check
+      responses:
+        '200': { description: Ready }
+  /api/notes:
+    get:
+      summary: List notes for a board
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - in: query
+          name: boardId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Note' }
+        '400':
+          description: Missing boardId
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/notes/cleanup:
+    post:
+      summary: Delete notes missing boardId
+      security: [ { bearerAuth: [] } ]
+      responses:
+        '200':
+          description: Cleanup result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+  /api/logged_users:
+    get:
+      summary: List unique logged users (DB aggregate)
+      security: [ { bearerAuth: [] } ]
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/User' }
+  /api/ux/analyze:
+    post:
+      summary: Analyze text or uploaded file for UX insights
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: { type: string, description: 'Plain text to analyze' }
+                text_inputs:
+                  type: array
+                  items: { type: string }
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: .pdf, .docx, or .txt
+      responses:
+        '200':
+          description: UX report
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UXReport' }
+        '400':
+          description: Invalid or unsupported input
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: Upstream Space error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
