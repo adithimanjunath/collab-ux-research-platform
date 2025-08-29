@@ -1,4 +1,4 @@
-name: CI - Build Frontend and Backend
+name: CI
 
 on:
   push:
@@ -7,12 +7,13 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  frontend:
+    name: Frontend (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
-    env:
-      CI: false
-
-
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18]
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v3
@@ -20,41 +21,64 @@ jobs:
       - name: 🟦 Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
-      
+          node-version: ${{ matrix.node }}
+
       - name: Cache Node modules
         uses: actions/cache@v3
         with:
           path: client/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/client/package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ matrix.node }}-${{ hashFiles('**/client/package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-node-
+            ${{ runner.os }}-node-${{ matrix.node }}-
 
       - name: 📦 Install frontend dependencies
         run: |
           cd client
-          npm install
+          npm ci || npm install
 
       - name: Lint frontend
         run: |
           cd client
           npm run lint
-      
+
       - name: Build frontend
         run: |
           cd client
           npm run build
 
+      - name: Test frontend (with coverage)
+        run: |
+          cd client
+          CI=true npm test -- --watchAll=false --coverage
+
+      - name: Upload frontend coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-coverage-node${{ matrix.node }}
+          path: client/coverage
+
+  backend:
+    name: Backend (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10"]
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+
       - name: 🐍 Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
-      
-      - name: Cache Python packages
+          python-version: ${{ matrix.python }}
+
+      - name: Cache pip
         uses: actions/cache@v3
         with:
-          path: server/.cache
-          key: ${{ runner.os }}-python-${{ hashFiles('**/server/requirements.txt') }}
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python }}-${{ hashFiles('**/server/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -63,3 +87,17 @@ jobs:
           cd server
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Test backend (with coverage)
+        env:
+          PYTHONWARNINGS: default
+        run: |
+          cd server
+          pytest --cov=. --cov-report=xml:coverage.xml --cov-report=term-missing
+
+      - name: Upload backend coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-coverage-py${{ matrix.python }}
+          path: server/coverage.xml
