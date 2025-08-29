@@ -27,7 +27,7 @@ def analyze_options():
 def analyze():
     """
     Accepts:
-      - multipart/form-data with 'file' (.pdf/.docx/.txt)
+      - multipart/form-data with 'file' (.pdf)
       - form-data with 'text'
       - application/json with {"text": "..."} or {"text_inputs": ["...", "..."]}
     Returns JSON:
