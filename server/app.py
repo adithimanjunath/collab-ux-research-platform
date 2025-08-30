@@ -1,7 +1,8 @@
 
 import os 
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), 'server', '.env'))
+# Load env from server/.env (the file is alongside this app.py)
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 from auth import firebase_config
 # import eventlet
 # eventlet.monkey_patch()

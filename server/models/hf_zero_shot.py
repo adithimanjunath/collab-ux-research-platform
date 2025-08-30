@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, cast, Iterable, Tuple
 import re,os
-from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories,PREF_RANK
+from .base import UXModel, CATEGORIES, passes_category_gate, sort_categories,PREF_RANK, CATEGORY_HINTS
 
 # ---- Small adapters that mimic transformers pipelines but call HF API ----
 class _RemoteZeroShotPipeline:
@@ -354,5 +354,72 @@ class HFZeroShotModel(UXModel):
             "pie_data": pie_data,
             "insights": insights,
             "positive_highlights": positive_highlights,
+            "delight_distribution": delight_distribution,
+        }
+
+    def _analyze_heuristics_only(self, items: List[str]) -> Dict[str, Any]:
+        # Determine critiques using negation-aware keywords
+        is_critique = [self._has_suggestion_keyword(t) for t in items]
+
+        # Categorize critiques using regex hints and additional responsiveness heuristics
+        category_feedbacks: Dict[str, List[str]] = {cat: [] for cat in CATEGORIES}
+        for text, crit in zip(items, is_critique):
+            if not crit:
+                continue
+            lower = text.lower()
+            matched: set[str] = set()
+            # Base hints from CATEGORY_HINTS
+            for cat, rx in CATEGORY_HINTS.items():
+                try:
+                    if rx.search(lower):
+                        matched.add(cat)
+                except Exception:
+                    pass
+            # Extra responsiveness heuristics
+            if re.search(r"\bunresponsive\b|\blayout\s*(?:breaks?|broken)\b|\boverlap\w*\b|\b(responsive|breakpoint|mobile|tablet|phone|screen\s*size|resize|viewport)\b", lower, re.I):
+                matched.add("Responsiveness")
+            # Navigation quick rule
+            if re.search(r"(couldn['’]t|can['’]t|cannot)\s+find.*\b(submit|menu|settings)\b", lower):
+                matched.add("Navigation")
+            # Usability quick rule
+            if re.search(r"\b(confus\w+|not\s+intuitive|hard\s+to\s+(find|use))\b", lower):
+                matched.add("Usability")
+            # Performance quick rule
+            if re.search(r"\b(slow|lag|takes?\s+too\s+long)\b", lower):
+                matched.add("Performance")
+
+            if not matched:
+                matched.add("Feedback")
+
+            for cat in matched:
+                if text not in category_feedbacks[cat]:
+                    category_feedbacks[cat].append(text)
+
+        # Positive highlights: keep short praise-only snippets
+        positives = [t for t, c in zip(items, is_critique) if not c]
+        praise = [self._extract_praise_clause(t) for t in positives][:6]
+
+        # Build outputs
+        counts = {cat: len(category_feedbacks.get(cat, [])) for cat in CATEGORIES}
+        nonzero = [c for c in CATEGORIES if counts[c] > 0]
+        pie_order = sort_categories(nonzero)
+        pie_data = [{"name": c, "value": counts[c]} for c in pie_order]
+
+        insights = {cat: vals[:6] for cat, vals in category_feedbacks.items() if vals}
+        if insights:
+            ordered = sort_categories(list(insights.keys()))
+            insights = {k: insights[k] for k in ordered}
+
+        top_insight = (
+            insights[next(iter(insights))][0] if insights else (positives[0] if positives else "No strong themes detected.")
+        )
+
+        delight_distribution = [{"name": c, "value": 0} for c in CATEGORIES]
+
+        return {
+            "top_insight": top_insight,
+            "pie_data": pie_data,
+            "insights": insights,
+            "positive_highlights": praise,
             "delight_distribution": delight_distribution,
         }
