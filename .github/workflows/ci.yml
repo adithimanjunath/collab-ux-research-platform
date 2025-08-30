@@ -101,3 +101,23 @@ jobs:
         with:
           name: server-coverage-py${{ matrix.python }}
           path: server/coverage.xml
+
+
+      - name: E2E (Cypress, stubbed)
+        uses: cypress-io/github-action@v6
+        with:
+          working-directory: client
+          start: npm start
+          wait-on: 'http://localhost:3000'
+          wait-on-timeout: 120
+        env:
+          REACT_APP_E2E: '1'
+          CYPRESS_video: 'true'
+          CYPRESS_BASE_URL: 'http://localhost:3000'
+
+      - name: Upload Cypress videos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-videos-node${{ matrix.node }}
+          path: client/cypress/videos

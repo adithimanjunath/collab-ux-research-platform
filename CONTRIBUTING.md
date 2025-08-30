@@ -79,3 +79,13 @@ Backend (pytest)
 
 Thanks again for contributing!
 
+
+
+E2E (Cypress)
+- Located under `client/cypress/`
+- Run locally:
+  - `cd client && npm run cy:open` (interactive)
+  - `cd client && npm run cy:run` (headless)
+- Current specs include homepage smoke and backend health/doc checks. To cover protected flows deterministically, add a small test hook in the client:
+  - In `src/services/socketService.js` we already export a mock socket when `window.Cypress` is present.
+  - Optionally add a similar hook in your auth layer (e.g., set a fake user when `window.Cypress` is present) so ProtectedRoute allows navigation during E2E.
