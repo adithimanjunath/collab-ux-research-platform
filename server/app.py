@@ -11,6 +11,7 @@ from flask_socketio import SocketIO
 
 from routes.note_routes import note_bp
 from routes.ux_report_routes import ux_bp
+from routes.test_routes import test_bp
 from events.board_events import register_socket_events
 
 
@@ -28,6 +29,9 @@ socketio = SocketIO(
 
 app.register_blueprint(note_bp)
 app.register_blueprint(ux_bp)
+import os as _os
+if _os.getenv('TEST_LOGIN_SECRET'):
+    app.register_blueprint(test_bp)
 register_socket_events(socketio)
 
 @app.get('/openapi.yaml')

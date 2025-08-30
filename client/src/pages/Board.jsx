@@ -183,11 +183,19 @@ useEffect(() => {
 
   // ---------- Auth ----------
   useEffect(() => {
+    // Cypress E2E test hook: if a fake user is injected, use it
+    if (typeof window !== 'undefined' && window.Cypress && window.__TEST_AUTH__) {
+      setUser(window.__TEST_AUTH__);
+    }
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser || null);
       setUsername(currentUser?.displayName || "Anonymous");
       if (!currentUser) {
-        navigate("/login"); // redirect if not logged in
+        const hasTestUser = typeof window !== 'undefined' && window.Cypress && window.__TEST_AUTH__;
+        if (!hasTestUser) navigate("/login"); // redirect if not logged in
       }
     });
     return () => unsubscribe();

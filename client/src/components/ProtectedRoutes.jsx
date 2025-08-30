@@ -10,6 +10,12 @@ function ProtectedRoute({ children }) {
   const [authedUser, setAuthedUser] = useState(null);
 
   useEffect(() => {
+    // Cypress test hook: allow injecting a fake user to bypass real auth in E2E
+    if (typeof window !== 'undefined' && window.Cypress && window.__TEST_AUTH__) {
+      setAuthedUser(window.__TEST_AUTH__);
+      setLoading(false);
+      return () => {};
+    }
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthedUser(user);
       setLoading(false);
