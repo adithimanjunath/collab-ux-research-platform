@@ -269,6 +269,7 @@ class HFZeroShotModel(UXModel):
         
 
         delight_counts: Dict[str, int] = {cat: 0 for cat in CATEGORIES}
+        delight_by_theme: Dict[str, List[str]] = {}
         if positive_comments:
             zsc_pos_outputs: List[Dict[str, Any]] = []
             for _, chunk in self._batch(positive_comments, size=8):
@@ -285,11 +286,16 @@ class HFZeroShotModel(UXModel):
                 )
                 zsc_pos_outputs.extend(out)
 
-            for z in zsc_pos_outputs:
+            # Map each positive comment to its top-1 label when confident enough
+            for text, z in zip(positive_comments, zsc_pos_outputs):
                 best_label = z.get("labels", [""])[0]
                 best_score = float((z.get("scores", [0.0]) or [0.0])[0])
                 if best_label in delight_counts and best_score >= self.DELIGHT_TOP1_THRESHOLD:
                     delight_counts[best_label] += 1
+                    praise_text = self._extract_praise_clause(text)
+                    arr = delight_by_theme.setdefault(best_label, [])
+                    if praise_text not in arr:
+                        arr.append(praise_text)
 
         delight_distribution = [{"name": cat, "value": int(delight_counts[cat])} for cat in CATEGORIES]
 
@@ -355,6 +361,7 @@ class HFZeroShotModel(UXModel):
             "insights": insights,
             "positive_highlights": positive_highlights,
             "delight_distribution": delight_distribution,
+            "delight_by_theme": delight_by_theme,
         }
 
     def _analyze_heuristics_only(self, items: List[str]) -> Dict[str, Any]:
