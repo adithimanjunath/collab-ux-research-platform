@@ -86,6 +86,10 @@ def analyze():
         current_app.logger.exception("Space call failed")  # logs traceback
         return jsonify({"error": "space_call_failed", "upstream_status": status, "details": details}), 502
 
+    except requests.RequestException as e:  # network/timeout -> 502
+        current_app.logger.exception("Space network error")
+        return jsonify({"error": "space_call_failed", "details": str(e)}), 502
+
     except Exception as e:  # ADD (convert any crash to JSON 500)
         import traceback, sys
         traceback.print_exc(file=sys.stderr)

@@ -23,8 +23,8 @@ _HEADERS = {"Content-Type": "application/json"}
 if _HF_TOKEN:
     _HEADERS["Authorization"] = f"Bearer {_HF_TOKEN}"
 
-# Default per-call timeouts (seconds)
-_DEFAULT_TIMEOUT = 60
+# Default per-call timeouts (seconds). Allow override via env.
+_DEFAULT_TIMEOUT = int(os.getenv("HF_TIMEOUT", "120"))
 
 
 # ---------------------------------------------------------------------
@@ -38,6 +38,12 @@ def _post_json(path: str, payload: Dict[str, Any], *, timeout: int = _DEFAULT_TI
     url = f"{SPACE_URL}{path}"
     try:
         r = requests.post(url, headers=_HEADERS, json=payload, timeout=timeout)
+    except requests.Timeout as e:
+        # One retry on hard timeout with a longer window
+        try:
+            r = requests.post(url, headers=_HEADERS, json=payload, timeout=max(timeout, 180))
+        except Exception as ee:
+            raise RuntimeError(f"Hugging Face Space request failed to {url}: {ee}") from ee
     except requests.RequestException as e:
         raise RuntimeError(f"Hugging Face Space request failed to {url}: {e}") from e
 
