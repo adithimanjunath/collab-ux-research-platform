@@ -7,6 +7,7 @@ import ResultsPreview from '../components/ResultsPreview';
 import Button from "@mui/material/Button";
 import Header from '../components/Header';
 import { useTheme } from '@mui/material';
+import { getAuthHeader } from '../utils/authHeader';
 
 const quotes = [
   '“Pay attention to what users do, not what they say.” – Jakob Nielsen',
@@ -51,8 +52,20 @@ function ReportPage() {
           ? 'http://localhost:5050'
           : '');
 
-      const res = await fetch(`${API_BASE}/api/ux/analyze`, { method: 'POST', body: form });
-      if (!res.ok) throw new Error((await res.text()) || 'Request failed');
+      // Include Authorization header (endpoint is protected)
+      let headers = {};
+      try {
+        const auth = await getAuthHeader();
+        headers = { ...auth, Accept: 'application/json' };
+      } catch (e) {
+        throw new Error('Not authenticated');
+      }
+
+      const res = await fetch(`${API_BASE}/api/ux/analyze`, { method: 'POST', headers, body: form });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(text || `HTTP ${res.status}`);
+      }
 
       const data = await res.json();
       setReportData({
@@ -67,7 +80,8 @@ function ReportPage() {
     } catch (err) {
       console.error(err);
       console.error('Analyze request failed:', err);
-      alert(`Analysis failed. ${err.message || 'Check console for details.'}`);
+      const msg = typeof err?.message === 'string' ? err.message : String(err);
+      alert(`Analysis failed. ${msg}`);
       setHasAnalyzed(false);
     } finally {
       setIsLoading(false);
