@@ -1,0 +1,5 @@
+Detected columns: {'text': 'text', 'label': 'label', 'all_headers': ['text', 'label']}
+Parsed rows: 60
+Gold label distribution: Counter({'Navigation': 10, 'Usability': 10, 'Feedback': 10, 'Responsiveness': 10, 'Performance': 10, 'Visual Design': 10})
+submitted 60 items (concurrency=4); waiting for first result…
+progress: 5/60 complete
