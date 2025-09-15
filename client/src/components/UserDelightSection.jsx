@@ -108,7 +108,7 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
 
   // 2) If there are entries but they all sum to 0, give each a tiny value
   const chartData = parsed.filter(d => d.value > 0);
-  const hasAnyEntries = parsed.length > 0;
+  const hasAnyEntries = chartData.length > 0;
  
   return (
     <Card variant="outlined" sx={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", borderRadius: 3, boxShadow: 2 }}>
