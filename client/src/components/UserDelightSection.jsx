@@ -3,21 +3,16 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import ChartLegend from "./ChartLegend";
 import { Card, CardContent, CardHeader, Typography, Divider, Box,Stack } from "@mui/material";
 
-const PASTELS = ["#BAE6FD","#A7F3D0","#FDE68A","#FBCFE8","#C7D2FE","#FCA5A5"];
+const COLORS = ['#93C5FD','#86EFAC','#FDE68A','#FBCFE8','#A7F3D0','#FCA5A5','#C7D2FE'];
 
-export function DelightNotes({ highlights = [], expandAll = false  }) {
+export function DelightNotes({ highlights = [], expandAll = false, chartData = [] }) {
   const [expandedTag, setExpandedTag] = useState({});
  
-
   // Normalize input to entries like [{ tag, items }]
-  const entries = Array.isArray(highlights)
-    ? (highlights.length > 0
-        ? [{ tag: "Notes", items: highlights }]
-        : [])
-    : Object.entries(highlights || {}).map(([tag, items]) => ({
-        tag,
-        items: Array.isArray(items) ? items : [],
-      }));
+   const entries = Object.entries(highlights || {}).map(([tag, items]) => ({
+    tag,
+    items: Array.isArray(items) ? items : [],
+  }));
 
   const has = entries.length > 0;
 
@@ -153,7 +148,7 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
                     isAnimationActive={false}
                   >
                     {chartData.map((_, i) => (
-                      <Cell key={i} fill={PASTELS[i % PASTELS.length]} />
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -161,7 +156,7 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
               </ResponsiveContainer>
             </Box>
             {/* Show legend whenever we have entries */}
-            <ChartLegend data={chartData} colors={PASTELS} />
+            <ChartLegend data={chartData} colors={COLORS} />
           </>
         )}
       </CardContent>

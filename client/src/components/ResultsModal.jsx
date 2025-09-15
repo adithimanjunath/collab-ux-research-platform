@@ -154,7 +154,7 @@ export default function ResultsModal({
             <SummaryTagsCard data={reportData?.pie_data} isLoading={isLoading} expandAll={exportMode} />
             <DelightChart data={reportData?.delight_distribution} expandAll={exportMode} />
             <InsightsByThemeCard insights={reportData?.insights} isLoading={isLoading} expandAll={exportMode} />
-            <DelightNotes highlights={reportData?.positive_highlights} expandAll={exportMode} />
+            <DelightNotes highlights={reportData?.delight_by_theme} expandAll={exportMode} />
           </Box>
         </DialogContent>
       </div>
