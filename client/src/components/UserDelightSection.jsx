@@ -104,8 +104,11 @@ export function DelightNotes({ highlights = [], expandAll = false  }) {
 }
 
 export function DelightChart({ data = [], isLoading = false, expandAll = false }) {
-  // consider “hasData” only when there’s at least one positive value
-  const hasData = Array.isArray(data) && data.some(d => (d?.value ?? 0) > 0);
+  // 1) We have an array?  2) What's the total?
+
+  const hasArray = Array.isArray(data) && data.length > 0;
+  const total = hasArray ? data.reduce((sum, d) => sum + (d.value || 0), 0) : 0;
+  const isEmpty =total === 0;
 
   return (
     <Card
@@ -123,14 +126,14 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
         title={<Typography variant="h6" sx={{ fontWeight: 600 }}>Delight Distribution</Typography>}
         action={
           <Typography variant="caption" color="text.secondary">
-            {isLoading ? "loading…" : hasData ? `${data.length}` : "—"}
+            {isLoading ? "loading…" : hasArray ? `${data.length}` : "—"}
           </Typography>
         }
       />
       <Divider />
       <CardContent sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* EMPTY state: plain HTML, no chart/legend */}
-        {!hasData ? (
+        {!hasArray || isEmpty ? (
           <Box
             sx={{
               flex: 1,
