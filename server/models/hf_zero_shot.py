@@ -429,4 +429,5 @@ class HFZeroShotModel(UXModel):
             "insights": insights,
             "positive_highlights": praise,
             "delight_distribution": delight_distribution,
+               
         }

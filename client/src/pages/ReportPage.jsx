@@ -74,7 +74,7 @@ function ReportPage() {
         insights: data.insights,
         positive_highlights: data.positive_highlights,
         delight_distribution: data.delight_distribution ?? data.delightDistribution ?? [],
-        delight_by_theme: data.delight_by_theme ?? data.delightByTheme ?? {},  
+        delight_by_theme: data.delight_by_theme,  
       });
       setHasAnalyzed(true);
       setShowResults(true);
