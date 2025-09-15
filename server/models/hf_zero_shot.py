@@ -47,7 +47,7 @@ class HFZeroShotModel(UXModel):
     CRITIQUE_NEG_PROB = 0.60          
     ZSC_THRESHOLD = 0.60        
     TOP_K=3                      
-    DELIGHT_TOP1_THRESHOLD = 0.50     
+    DELIGHT_TOP1_THRESHOLD = 0.35     
     DELIGHT_MAX_ITEMS = int(os.getenv("DELIGHT_MAX_ITEMS", "1000")) 
 
         # ---- Batch sizes (configurable via environment) ----
@@ -296,7 +296,19 @@ class HFZeroShotModel(UXModel):
                     arr = delight_by_theme.setdefault(best_label, [])
                     if praise_text not in arr:
                         arr.append(praise_text)
-
+            for text in positive_comments:
+                already_bucketed = any(text in arr or self._extract_praise_clause(text) in arr for arr in delight_by_theme.values())
+                if already_bucketed:
+                    continue
+                low = text.lower()
+                for cat, rx in CATEGORY_HINTS.items():
+                    try:
+                        if rx.search(low):
+                            delight_by_theme.setdefault(cat, []).append(self._extract_praise_clause(text))
+                            delight_counts[cat] += 1
+                            break
+                    except Exception:
+                        pass
         delight_distribution = [{"name": cat, "value": int(delight_counts[cat])} for cat in CATEGORIES]
 
         # --- 5) Summaries for categories with issues (unchanged logic)
