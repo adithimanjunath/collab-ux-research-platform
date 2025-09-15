@@ -107,19 +107,16 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
   }));
 
   // 2) If there are entries but they all sum to 0, give each a tiny value
+  const chartData = parsed.filter(d => d.value > 0);
   const hasAnyEntries = parsed.length > 0;
-  const total = parsed.reduce((s, d) => s + d.value, 0);
-  const chartData = total > 0
-    ? parsed
-    : parsed.map(d => ({ ...d, value: 1 })); // tiny placeholders so slices render
-
+ 
   return (
     <Card variant="outlined" sx={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", borderRadius: 3, boxShadow: 2 }}>
       <CardHeader
         title={<Typography variant="h6" sx={{ fontWeight: 600 }}>Delight Distribution</Typography>}
         action={
           <Typography variant="caption" color="text.secondary">
-            {isLoading ? "loading…" : hasAnyEntries ? `${parsed.length}` : "—"}
+            {isLoading ? "loading…" : hasAnyEntries ? `${chartData.length}` : "—"}
           </Typography>
         }
       />
