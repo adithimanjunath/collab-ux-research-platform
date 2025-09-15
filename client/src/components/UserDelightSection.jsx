@@ -3,7 +3,14 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import ChartLegend from "./ChartLegend";
 import { Card, CardContent, CardHeader, Typography, Divider, Box,Stack } from "@mui/material";
 
-const COLORS = ['#93C5FD','#86EFAC','#FDE68A','#FBCFE8','#A7F3D0','#FCA5A5','#C7D2FE'];
+const COLORS =  {
+  Usability:       '#93C5FD',
+  Performance:     '#86EFAC',
+  'Visual Design': '#FDE68A',
+  Feedback:        '#FBCFE8',
+  Navigation:      '#A7F3D0',
+  Responsiveness:  '#C7D2FE',
+};
 
 export function DelightNotes({ highlights = [], expandAll = false, chartData = [] }) {
   const [expandedTag, setExpandedTag] = useState({});
@@ -144,8 +151,8 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
                     outerRadius="70%"
                     isAnimationActive={false}
                   >
-                    {chartData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    {chartData.map((d, i) => (
+                      <Cell key={i} fill={COLORS[d.name]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -153,7 +160,7 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
               </ResponsiveContainer>
             </Box>
             {/* Show legend whenever we have entries */}
-            <ChartLegend data={chartData} colors={COLORS} />
+            <ChartLegend data={chartData} colors={chartData.map(d=>COLORS[d.name])} />
           </>
         )}
       </CardContent>

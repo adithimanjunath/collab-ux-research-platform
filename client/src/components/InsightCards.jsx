@@ -12,7 +12,12 @@ import {
   CircularProgress,Stack
 } from "@mui/material";
 
-const COLORS = ['#93C5FD','#86EFAC','#FDE68A','#FBCFE8','#A7F3D0','#FCA5A5','#C7D2FE'];
+const COLORS = {Usability:       '#93C5FD', // blue
+  Performance:     '#86EFAC', // green
+  'Visual Design': '#FDE68A', // yellow
+  Feedback:        '#FBCFE8', // pink
+  Navigation:      '#A7F3D0', // teal
+  Responsiveness:  '#C7D2FE',};
 
 export function SummaryTagsCard({ data = [], isLoading = false, expandAll = false }) {
   const hasData = Array.isArray(data) && data.length > 0;
@@ -66,8 +71,8 @@ export function SummaryTagsCard({ data = [], isLoading = false, expandAll = fals
                     outerRadius="70%"
                     isAnimationActive={false} // avoids export timing glitches
                   >
-                    {data.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    {data.map((d, i) => (
+                      <Cell key={i} fill={COLORS[d.name]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -76,7 +81,7 @@ export function SummaryTagsCard({ data = [], isLoading = false, expandAll = fals
             </Box>
 
             {/* Legend wraps/flows inside card bounds */}
-            < ChartLegend data={data} colors={COLORS} />
+            < ChartLegend data={data} colors={data.map(d=>COLORS[d.name])} />
           </>
         ) : (
           <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 4 }}>
