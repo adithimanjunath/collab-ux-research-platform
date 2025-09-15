@@ -29,7 +29,7 @@ export function SummaryTagsCard({ data = [], isLoading = false, expandAll = fals
       }}
     >
       <CardHeader
-        title={<Typography variant="h6" sx={{ fontWeight: 600 }}>Summary Tags</Typography>}
+        title={<Typography variant="h6" sx={{ fontWeight: 600 }}> Issue Summary Tags</Typography>}
         action={
           <Typography variant="caption" color="text.secondary">
             {isLoading ? "loading…" : hasData ? `${data.length}` : "—"}
@@ -119,7 +119,7 @@ export function InsightsByThemeCard({ insights = {}, isLoading = false, expandAl
     >
 
       <CardHeader
-        title={<Typography variant="h6" sx={{ fontWeight: 600 }}>Insights by Theme</Typography>}
+        title={<Typography variant="h6" sx={{ fontWeight: 600 }}>Issues Faced by Users</Typography>}
         action={
           <Typography variant="caption" color="text.secondary">
             {isLoading ? "loading…" : hasData ? `${entries.length} themes` : "—"}

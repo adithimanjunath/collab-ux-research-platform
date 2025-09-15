@@ -35,7 +35,7 @@ export function DelightNotes({ highlights = [], expandAll = false, chartData = [
       }}
     >
       <CardHeader
-        title={<Typography variant="h6" sx={{ fontWeight: 600 }}>User Delight — Notes</Typography>}
+        title={<Typography variant="h6" sx={{ fontWeight: 600 }}>User Delight Section</Typography>}
       />
       <Divider />
       <CardContent sx={{ flex: 1, overflow: "auto" }}>
