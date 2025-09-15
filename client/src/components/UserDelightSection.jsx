@@ -104,48 +104,35 @@ export function DelightNotes({ highlights = [], expandAll = false  }) {
 }
 
 export function DelightChart({ data = [], isLoading = false, expandAll = false }) {
-  // 1) We have an array?  2) What's the total?
+  // 1) Parse & normalize safely (accept name/label/tag and value/count)
+  const raw = Array.isArray(data) ? data : [];
+  const parsed = raw.map(d => ({
+    name: d?.name ?? d?.label ?? String(d?.tag ?? "Item"),
+    value: Number(d?.value ?? d?.count ?? 0),
+  }));
 
-  const hasArray = Array.isArray(data) && data.length > 0;
-  const total = hasArray ? data.reduce((sum, d) => sum + (d.value || 0), 0) : 0;
-  const isEmpty =total === 0;
+  // 2) If there are entries but they all sum to 0, give each a tiny value
+  const hasAnyEntries = parsed.length > 0;
+  const total = parsed.reduce((s, d) => s + d.value, 0);
+  const chartData = total > 0
+    ? parsed
+    : parsed.map(d => ({ ...d, value: 1 })); // tiny placeholders so slices render
 
   return (
-    <Card
-      variant="outlined"
-      sx={{
-        height: "100%",
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        borderRadius: 3,
-        boxShadow: 2,
-      }}
-    >
+    <Card variant="outlined" sx={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", borderRadius: 3, boxShadow: 2 }}>
       <CardHeader
         title={<Typography variant="h6" sx={{ fontWeight: 600 }}>Delight Distribution</Typography>}
         action={
           <Typography variant="caption" color="text.secondary">
-            {isLoading ? "loading…" : hasArray ? `${data.length}` : "—"}
+            {isLoading ? "loading…" : hasAnyEntries ? `${parsed.length}` : "—"}
           </Typography>
         }
       />
       <Divider />
       <CardContent sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        {/* EMPTY state: plain HTML, no chart/legend */}
-        {!hasArray || isEmpty ? (
-          <Box
-            sx={{
-              flex: 1,
-              minHeight: 220,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "text.secondary",
-              textAlign: "center",
-              px: 2,
-            }}
-          >
+        {!hasAnyEntries ? (
+          // No categories at all -> show the empty message
+          <Box sx={{ flex: 1, minHeight: 220, display: "flex", alignItems: "center", justifyContent: "center", color: "text.secondary", textAlign: "center", px: 2 }}>
             <Typography variant="body2">
               No specific user delight moments were found in the data.
             </Typography>
@@ -156,7 +143,7 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                   <Pie
-                    data={data}
+                    data={chartData}
                     dataKey="value"
                     nameKey="name"
                     cx="50%"
@@ -165,7 +152,7 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
                     outerRadius="70%"
                     isAnimationActive={false}
                   >
-                    {data.map((_, i) => (
+                    {chartData.map((_, i) => (
                       <Cell key={i} fill={PASTELS[i % PASTELS.length]} />
                     ))}
                   </Pie>
@@ -173,8 +160,8 @@ export function DelightChart({ data = [], isLoading = false, expandAll = false }
                 </PieChart>
               </ResponsiveContainer>
             </Box>
-            {/* Show legend ONLY when we have data */}
-            < ChartLegend data={data} colors={PASTELS} />
+            {/* Show legend whenever we have entries */}
+            <ChartLegend data={chartData} colors={PASTELS} />
           </>
         )}
       </CardContent>
