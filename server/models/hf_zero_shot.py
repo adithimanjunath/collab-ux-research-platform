@@ -266,10 +266,10 @@ class HFZeroShotModel(UXModel):
         praise_only: List[str] = [self._extract_praise_clause(t) for t in positives]
         positive_comments = praise_only[: self.DELIGHT_MAX_ITEMS]# cap to protect worst-case 
         positive_highlights = praise_only[:6]
-        
 
         delight_counts: Dict[str, int] = {cat: 0 for cat in CATEGORIES}
         delight_by_theme: Dict[str, List[str]] = {}
+
         if positive_comments:
             zsc_pos_outputs: List[Dict[str, Any]] = []
             for _, chunk in self._batch(positive_comments, size=8):
@@ -278,7 +278,7 @@ class HFZeroShotModel(UXModel):
                     classifier(
                         chunk,
                         candidate_labels=CATEGORIES,
-                        multi_label=False,
+                        multi_label=True,
                         batch_size=8,
                         truncation=True,
                         hypothesis_template=self.ZSC_HYPOTHESIS,
@@ -288,14 +288,38 @@ class HFZeroShotModel(UXModel):
 
             # Map each positive comment to its top-1 label when confident enough
             for text, z in zip(positive_comments, zsc_pos_outputs):
-                best_label = z.get("labels", [""])[0]
-                best_score = float((z.get("scores", [0.0]) or [0.0])[0])
-                if best_label in delight_counts and best_score >= self.DELIGHT_TOP1_THRESHOLD:
-                    delight_counts[best_label] += 1
-                    praise_text = self._extract_praise_clause(text)
-                    arr = delight_by_theme.setdefault(best_label, [])
-                    if praise_text not in arr:
-                        arr.append(praise_text)
+                labels = z.get("labels", [""])[0]
+                scores = [float(s) for s in (z.get("scores", []) or [])]
+                sorted_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+
+                thr = max(self.ZSC_THRESHOLD, self.DELIGHT_TOP1_THRESHOLD)
+                kept = [(labels[i], scores[i]) for i in range(len(scores)) if scores[i] >= thr]
+                if any(l in ["Usability","Navigation","Performance","Responsiveness","Visual Design"] for l, _ in kept):
+                    kept = [(l,s) for l,s in kept if l != "Feedback"]
+
+                kept = kept[:2]
+                if not kept:
+                    lower = text.lower()
+                    if re.search(r"\b(fast|quick|loaded|speed(y)?|snappy)\b", lower):
+                        kept.append(("Performance", 0.51))
+                    if re.search(r"\b(responsive|breakpoint|mobile|tablet|phone)\b", lower):
+                        kept.append(("Responsiveness", 0.51))
+                    if re.search(r"\b(intuitive|easy|clear|simple)\b", lower):
+                        kept.append(("Usability", 0.51))
+                    if re.search(r"\b(modern|clean|beautiful|visual|design|color)\b", lower):
+                        kept.append(("Visual Design", 0.51))
+                
+                praise_text = self._extract_praise_clause(text)
+                seen = set()
+
+                for lab, _ in kept:
+                    if lab in CATEGORIES and lab not in seen:
+                        seen.add(lab)
+                        delight_counts[lab] += 1
+                        arr = delight_by_theme.setdefault(lab, [])
+                        if praise_text not in arr:
+                            arr.append(praise_text)
+                    
             for text in positive_comments:
                 already_bucketed = any(text in arr or self._extract_praise_clause(text) in arr for arr in delight_by_theme.values())
                 if already_bucketed:
