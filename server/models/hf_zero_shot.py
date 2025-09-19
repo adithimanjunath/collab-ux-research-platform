@@ -85,7 +85,7 @@ class HFZeroShotModel(UXModel):
         re.compile(rx, re.IGNORECASE)
         for rx in(
         r'\bshould\b',
-        r'\bcould\b',
+        r"\bcould(?:n't| not| be)\b",
         r'\bneed(?:s)?\s+to\b',
         r'would be (?:better|great)',
         r'\bimprov\w+\b',
@@ -190,6 +190,9 @@ class HFZeroShotModel(UXModel):
 
         is_critique_mask: List[bool] = []
         for text, sa in zip(items, sa_results):
+            if HFZeroShotModel._SAFE_NEGATED_PROBLEMS_RE.search(text):
+                is_critique_mask.append(False)
+                continue
             suggestive = self._has_suggestion_keyword(text)
             label = str(sa.get("label", "")).upper()
             score = float(sa.get("score", 0.0))
