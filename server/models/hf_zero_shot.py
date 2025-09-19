@@ -293,14 +293,29 @@ class HFZeroShotModel(UXModel):
 
             # Map each positive comment to its top-1 label when confident enough
             for text, z in zip(positive_comments, zsc_pos_outputs):
-                labels = z.get("labels", [""])[0]
+                labels = list(z.get("labels", []) or [])
                 scores = [float(s) for s in (z.get("scores", []) or [])]
-                pairs = list(zip(labels, scores))
 
-                pairs.sort(key=lambda t: t[1], reverse=True)
-                kept: List[Tuple[str, float]] = [(l, s) for (l, s) in pairs if s >= self.DELIGHT_TOP1_THRESHOLD][:1]
+                kept: List[Tuple[str, float]] = []
+                if labels and scores:
+                    pairs=sorted(zip(labels, scores), key=lambda x: x[1], reverse=True)
+                    best_lab , best_sc = pairs[0]
+                    if best_sc >= self.DELIGHT_TOP1_THRESHOLD:
+                        kept=[(best_lab, best_sc)]
+
                 if any(l in ["Usability","Navigation","Performance","Responsiveness","Visual Design"] for l, _ in kept):
                     kept = [(l,s) for l,s in kept if l != "Feedback"]
+                
+                if not kept:
+                    lower = text.lower()
+                    if re.search(r"\b(fast|quick|loaded|speed(y)?|snappy)\b", lower):
+                        kept.append(("Performance", 0.51))
+                    if re.search(r"\b(responsive|breakpoint|mobile|tablet|phone)\b", lower):
+                        kept.append(("Responsiveness", 0.51))
+                    if re.search(r"\b(intuitive|easy|clear|simple)\b", lower):
+                        kept.append(("Usability", 0.51))
+                    if re.search(r"\b(modern|clean|beautiful|visual|design|color)\b", lower):
+                        kept.append(("Visual Design", 0.51))
 
                 praise_text = self._extract_praise_clause(text)
                 seen: set[str] = set()
