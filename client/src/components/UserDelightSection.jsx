@@ -4,12 +4,12 @@ import ChartLegend from "./ChartLegend";
 import { Card, CardContent, CardHeader, Typography, Divider, Box,Stack } from "@mui/material";
 
 const COLORS =  {
-  Usability:       '#93C5FD',
-  Performance:     '#86EFAC',
-  'Visual Design': '#FDE68A',
-  Feedback:        '#FBCFE8',
-  Navigation:      '#A7F3D0',
-  Responsiveness:  '#C7D2FE',
+  Usability:       '#56B4E9',
+  Performance:     '#009E73',
+  'Visual Design': '#F0E442',
+  Feedback:        '#E69F00',
+  Navigation:      '#0072B2',
+  Responsiveness:  '#D55E00',
 };
 
 export function DelightNotes({ highlights = [], expandAll = false, chartData = [] }) {

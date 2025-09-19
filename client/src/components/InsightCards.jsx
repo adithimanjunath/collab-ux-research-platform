@@ -12,12 +12,13 @@ import {
   CircularProgress,Stack
 } from "@mui/material";
 
-const COLORS = {Usability:       '#93C5FD', // blue
-  Performance:     '#86EFAC', // green
-  'Visual Design': '#FDE68A', // yellow
-  Feedback:        '#FBCFE8', // pink
-  Navigation:      '#A7F3D0', // teal
-  Responsiveness:  '#C7D2FE',};
+const COLORS = {
+  Usability:       '#56B4E9', 
+  Performance:     '#009E73',
+  'Visual Design': '#F0E442', 
+  Feedback:        '#E69F00', 
+  Navigation:      '#0072B2', 
+  Responsiveness:  '#D55E00',};
 
 export function SummaryTagsCard({ data = [], isLoading = false, expandAll = false }) {
   const hasData = Array.isArray(data) && data.length > 0;
