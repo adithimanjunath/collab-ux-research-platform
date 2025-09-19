@@ -254,6 +254,8 @@ class HFZeroShotModel(UXModel):
                         re.search(r"\boverlap\w*\b", lower) or
                         re.search(r"\b(responsive|breakpoint|mobile|tablet|phone|screen\s*size|resize|viewport)\b", lower)):
                         kept.append(("Responsiveness", 0.51))
+                if not kept:
+                    kept = [("Feedback", 0.51)]
                 seen_labs = set()
                 for lab, _ in kept:
                     if lab in CATEGORIES and lab not in seen_labs:
@@ -278,7 +280,7 @@ class HFZeroShotModel(UXModel):
                     classifier(
                         chunk,
                         candidate_labels=CATEGORIES,
-                        multi_label=True,
+                        multi_label=False,
                         batch_size=8,
                         truncation=True,
                         hypothesis_template=self.ZSC_HYPOTHESIS,
@@ -290,27 +292,15 @@ class HFZeroShotModel(UXModel):
             for text, z in zip(positive_comments, zsc_pos_outputs):
                 labels = z.get("labels", [""])[0]
                 scores = [float(s) for s in (z.get("scores", []) or [])]
-                sorted_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+                pairs = list(zip(labels, scores))
 
-                thr = max(self.ZSC_THRESHOLD, self.DELIGHT_TOP1_THRESHOLD)
-                kept = [(labels[i], scores[i]) for i in range(len(scores)) if scores[i] >= thr]
+                pairs.sort(key=lambda t: t[1], reverse=True)
+                kept: List[Tuple[str, float]] = [(l, s) for (l, s) in pairs if s >= self.DELIGHT_TOP1_THRESHOLD][:1]
                 if any(l in ["Usability","Navigation","Performance","Responsiveness","Visual Design"] for l, _ in kept):
                     kept = [(l,s) for l,s in kept if l != "Feedback"]
 
-                kept = kept[:2]
-                if not kept:
-                    lower = text.lower()
-                    if re.search(r"\b(fast|quick|loaded|speed(y)?|snappy)\b", lower):
-                        kept.append(("Performance", 0.51))
-                    if re.search(r"\b(responsive|breakpoint|mobile|tablet|phone)\b", lower):
-                        kept.append(("Responsiveness", 0.51))
-                    if re.search(r"\b(intuitive|easy|clear|simple)\b", lower):
-                        kept.append(("Usability", 0.51))
-                    if re.search(r"\b(modern|clean|beautiful|visual|design|color)\b", lower):
-                        kept.append(("Visual Design", 0.51))
-                
                 praise_text = self._extract_praise_clause(text)
-                seen = set()
+                seen: set[str] = set()
 
                 for lab, _ in kept:
                     if lab in CATEGORIES and lab not in seen:
@@ -319,20 +309,29 @@ class HFZeroShotModel(UXModel):
                         arr = delight_by_theme.setdefault(lab, [])
                         if praise_text not in arr:
                             arr.append(praise_text)
-                    
-            for text in positive_comments:
-                already_bucketed = any(text in arr or self._extract_praise_clause(text) in arr for arr in delight_by_theme.values())
-                if already_bucketed:
-                    continue
-                low = text.lower()
-                for cat, rx in CATEGORY_HINTS.items():
-                    try:
-                        if rx.search(low):
-                            delight_by_theme.setdefault(cat, []).append(self._extract_praise_clause(text))
-                            delight_counts[cat] += 1
-                            break
-                    except Exception:
-                        pass
+
+        for text in positive_comments:
+            praise_text = self._extract_praise_clause(text)
+            already = any(praise_text in arr for arr in delight_by_theme.values())
+            if already:
+                continue
+            low= text.lower()
+            placed = False
+            for cat, rx in CATEGORY_HINTS.items():
+                try:
+                    if rx.search(low):
+                        delight_by_theme.setdefault(cat, []).append(praise_text)
+                        delight_counts[cat] += 1
+                        placed = True
+                        break
+                except Exception:
+                    pass
+            if placed:
+                continue
+
+            delight_by_theme.setdefault("Feedback", []).append(praise_text)
+            delight_counts["Feedback"] += 1
+
         delight_distribution = [{"name": cat, "value": int(delight_counts[cat])} for cat in CATEGORIES]
 
         # --- 5) Summaries for categories with issues (unchanged logic)
